@@ -1,0 +1,482 @@
+---
+title: "Image Edge Detection"
+author: "Thomas Smale"
+date: "5/7/2022"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(gridExtra)
+library(ggplot2)
+library(gridExtra)
+library(tidyverse)
+library(jpeg)
+library(plotly)
+setwd("~/classroom/csci551/final_project")
+```
+
+# Gaussian Distribution aka Normal Distribution
+
+The first step in detection edges is noise reduction To accomplish this we will use Gaussian filtering which is used to blur images and remove noise. $\sigma$ is the standard deviation of the distribution, which measures how spread out values are from the mean. A large standard deviation means there is high variance and a low standard deviation indicates low variance. A key component of the standard deviation is that +-1 standard deviations away from the mean represent 68% of the values. While +-2 standard deviations away from the mean account for 95% of the set. Finally, +- 3 standard deviations contain 98% of the values. We will take advantage of this to fit a kernal that represents the shape of this. The bell curve is a common way to visualize this. The center of the curve is the mean and the width of the curve gives an idea for the standard deviation. 
+
+1 dimensional Gaussian function: 
+
+$$G(x) = \frac {1}{\sqrt{2\pi\sigma^2}}e^\frac{-x^2}{2\sigma^2}$$
+
+When working with images, we will use a 2 dimensional Gaussian function 
+$$G(x, y) = \frac{1}{2\pi\sigma^2}e^\frac{x^2+y^2}{2\sigma^2}$$
+
+The integral of the Gaussian Function also has importance.
+$$I = \int_{-\infty}^{\infty}e(-x^2)dx=\sqrt{\pi}$$
+* The square root of pi is the area under the graph of the Gaussian function
+* So the area under the curve will equal about 1.772. 
+
+```{r}
+gaussian <- function(x) {
+  part1 <- 1 / sqrt(2*pi*sd(x))
+  part2 <- exp(1)^((-x^2)/(2*(sd(x)^2)))
+  return(part1*part2)
+}
+gaussian2d <- function(x, y) {
+  part1 <- 1 / (2*pi*sd(x*y)^2)
+  part2 <- exp(1)^((-(x^2+y^2))/(2*(sd(x*y)^2)))
+  return(part1*part2)
+}
+#The weight sets the standard deviation of the bell curve
+#We will explore this later!
+gaussian2d_fixed <- function(x, y, weight) {
+  part1 <- 1 / (2*pi*(weight^2))
+  part2 <- exp(1)^((-(x^2+y^2))/(2*(weight^2)))
+  return(part1*part2)
+}
+gaussian_integral <- function(x) {
+  
+  return(exp(-x^2))
+}
+
+x <- y <- seq(-4, 4, .1)
+gauss <- ggplot(mapping=aes(x, y=gaussian(x))) + geom_line() + 
+  ggtitle("Gaussian function")
+# gauss2d <- persp(x, y, z=outer(x,y,gaussian2d), 
+#                  theta=20, main="2 Dimensional Gaussian Function")
+gauss2d_interactive <- plot_ly(x=~x, y=~y, z=~outer(x, y, gaussian2d)) %>% 
+  add_surface() %>%
+  layout(title="2 Dimensional Gaussian Function") %>%
+  layout(xaxis=(list(fixedrange=TRUE))) %>%
+  layout(yaxis=(list(fixedrange=TRUE))) 
+gauss_integral <- ggplot(mapping=aes(x, y=gaussian_integral(x))) + geom_line() +
+  ggtitle("Gaussian Integral")
+grid.arrange(gauss, gauss_integral, nrow=2)
+```
+
+### Creating a kernel 
+A kernel is a square matrix of coefficients with an anchor point in the center. We refer to the center point aka anchor, as (0, 0). The rest of the points represent the distance from the anchor using pixels as a unit. We plug these values into the 2 dimensional Gaussian function to initialize the values of the kernel. The sum of the values in the kernel must equate to 1. The original output from the 2 dimensional Gaussian function will not equal 1. So we take the sum of the values outputted, set it as the denominator, and divide by 1. Then we multiply that, (1 / sum(x)) by all the values from the output. The sum of the values in the kernel will now equal 1. We use the kernel to apply convolutions to the image to produce edge detection. 
+
+$$
+\begin{array}{ccc}
+{(1, 1)} & {(0, 1)} & {(1, 1)}\\
+{(1, 0)} & {(0, 0)} & {(1, 0)}\\
+{(1, 1)} & {(0, 1)} & {(1, 1)}
+\end{array}
+$$
+
+```{r}
+#Kernel size 3
+x <- c(1, 0, 1, 
+       1, 0, 1, 
+       1, 0, 1)
+y <- c(1, 1, 1,
+       0, 0, 0, 
+       1, 1, 1)
+z <- gaussian2d_fixed(x, y, 5.5)
+z <- z * (1 / sum(z))
+z <- array(z, dim=c(sqrt(length(x)), sqrt(length(y))))
+discrete_gauss3x3 <- plot_ly(x=~x, y=~y, z=~z) %>%
+  add_surface() %>%
+  layout(title="Discrete Approximation Kernel 3x3",
+         xaxis=(list(fixedrange=TRUE)),
+         yaxis=list(fixedrange=TRUE))
+#Kernel size 5
+x <- c(2, 1, 0, 1, 2,
+       2, 1, 0, 1, 2,
+       2, 1, 0, 1, 2,
+       2, 1, 0, 1, 2,
+       2, 1, 0, 1, 2)
+y <- c(2, 2, 2, 2, 2,
+       1, 1, 1, 1, 1,
+       0, 0, 0, 0, 0,
+       1, 1, 1, 1, 1,
+       2, 2, 2, 2, 2)
+z <- gaussian2d_fixed(x, y, 1.0)
+z <- z * (1 / sum(z))
+z <- array(z, dim=c(sqrt(length(x)), sqrt(length(x))))
+discrete_gauss5x5 <- plot_ly(x=~x, y=~y, z=~z) %>%
+  add_surface() %>%
+  layout(title="Discrete Approximation Kernel 5x5")
+```
+
+
+# Convolution
+When applying a kernel to an image, it may result in a smaller size. The output of the image can be calculated using this formula.
+```{r}
+# Calculate the output size of image after applying filter and convolution 
+# dim is width or height of image
+# ksize is size of kernal
+# padding is if we want a border or something like that
+# stride is how much the filter increments by
+new_size <- function(dim, ksize, padding, stride) {
+  return(((dim-ksize+2*padding)/1)+1)
+}
+```
+
+
+Working with Uniform Distribution.  
+
+CLT: 
+Take K amount of random samples from x. Then take the mean of those K values. Repeat his N amount of times. Create a histogram from all the means. Then plot a curve.
+* Sample size should be around 30. 
+* Maybe calculate kernal using this 
+* Can get mean and SD from CLT
+
+Normal Distribution: 
+  Probability on the y axis 
+  Likelihood of finding that observation
+PDF: Probability Density Function
+* Derivative of the CDF
+Default is mean = 0 and standard deviation = 1
+Density curve
+* Look for peaks of frequently occuring values
+* Skew: To the left or to the right
+  + Many models assume no skew
+  + Can inform us about model bias 
+* Median: 
+* Mean: Center of the curve
+* SD: width of the curve 
+  + For normal curve 95% of measurements fall between +- 2 sd of the mean
+Quantiles
+* Waht are thossee
+CDF: Cumulative Distribution Function
+
+```{r}
+cone <- function(x, y) {
+  sqrt(x^2+y^2)
+}
+x <- y <- seq(-1, 1, length=20)
+z <- outer(x, y, cone)
+```
+
+
+
+```{r}
+x <- seq(-10, 10, by=.1)
+distributions <- data.frame(x, 
+                            probability=pnorm(x), 
+                            density=dnorm(x), 
+                            gauss=gaussian(x)
+                            )
+ggplot(distributions, aes(x, x)) + geom_line()
+#ggplot(pdf, aes(x, y=qnorm(density))) + geom_line()
+cdf <- ggplot(distributions, aes(x, y=probability)) + geom_line() + 
+  ggtitle("Cumulative Density Function")
+pdf <- ggplot(distributions, aes(x, y=density)) + geom_line() + 
+  ggtitle("Probability Density Function")
+d <- density(x, kernel="gaussian")
+df <- data.frame(x=d$x, y=d$y)
+grid.arrange(pdf, cdf)
+# pdf_plot <- ggplot(pdf, aes(x=probability, y=density)) + geom_line() +
+#   ggtitle("Probability Density Function")
+rand <- ggplot(mapping=aes(x=rnorm(100), fill="orange")) + geom_density() + 
+  ggtitle("Random distribution")
+```
+
+### CLT 
+```{r}
+#Pixel color and width of the row
+clt <- function(color) {
+  num_samples <- 25
+  num_averages <- 1000
+  averages <- rep(0.69, 1, num_averages)
+  for(i in 1:num_averages) {
+    averages[i] <- mean(sample(x, num_samples, replace=TRUE))
+  }
+  return(averages)
+}
+```
+
+
+### Image
+
+Analysis of a random image
+
+This shows a distribution of the pixels. 
+
+Can you spot the edges from the Gaussian Distribution?
+
+You can spot where the row starts and ends
+```
+Rscript pixel_density.r filename
+```
+
+Gaussian filter: To remove noise in image
+
+### 1 dimensional transformations
+
+```{r}
+#Make a rscript, that accepts a filename. 
+#So you can generate these graphs during the presentation
+filename <- "dandelion.jpeg"
+img <- readJPEG(filename)
+dims <- attributes(img)$dim
+
+if(dims[3] != 3) {
+  print("This could be more flexible. I'll do it later")
+  stop("Channels not RGB")
+}
+
+
+
+rgb <- data.frame(red=as.vector(img[,,1]),
+                  green=as.vector(img[,,2]),
+                  blue=as.vector(img[,,3]))
+rgb <- rgb %>% 
+  pivot_longer(cols=c("red", "green", "blue"), names_to="color")
+
+pdf <- rgb %>% 
+  group_by(color) %>%
+  mutate(pdf=pnorm(value)) %>%
+  ggplot(mapping=aes(1:nrow(rgb), y=pdf, group=color, colour=color)) +
+  geom_line() +
+  scale_color_manual(values=c("blue", "green", "red")) +
+  ggtitle("Probability Density Function of Image Rows") +
+  facet_wrap(vars(color), ncol=1)
+
+cdf <- rgb %>% 
+  group_by(color) %>%
+  mutate(cdf=dnorm(value)) %>%
+  ggplot(mapping=aes(1:nrow(rgb), y=cdf, group=color, colour=color)) +
+  geom_line() +
+  scale_color_manual(values=c("blue", "green", "red")) +
+  ggtitle("Cumulative Distribution Function of Image Rows") +
+  facet_wrap(vars(color), ncol=1)
+
+#This graph is hot garbage because density is smoothing values for us
+gauss <- rgb %>%
+  group_by(color) %>%
+  mutate(gauss=gaussian(value)) %>%
+  ggplot() +
+  geom_density(aes(x=gauss, group=color, colour=color)) +
+  geom_density(aes(x=value, group=color)) +
+  scale_color_manual(values=c('blue', 'green', 'red')) +
+  ggtitle('Gaussian function of Image Rows') +
+  facet_wrap(vars(color), ncol=1, scales="free_y")
+
+#Format dataframe
+df <- rgb %>% 
+  group_by(color) %>%
+  mutate(pdf=pnorm(value),
+         cdf=dnorm(value), 
+         gauss=gaussian(value),
+         row=row_number()) %>% 
+  select(-value) %>%
+  pivot_wider(names_from=color, values_from = c(pdf, cdf, gauss)) %>%
+  select(-row)
+
+
+pdf_img <- array(dim=dims)
+pdf_img[,,1] <- df$pdf_red
+pdf_img[,,2] <- df$pdf_green
+pdf_img[,,3] <- df$pdf_blue
+
+cdf_img <- array(dim=dims)
+cdf_img[,,1] <- df$cdf_red
+cdf_img[,,2] <- df$cdf_green
+cdf_img[,,3] <- df$cdf_blue
+
+gauss_img <- array(dim=dims)
+gauss_img[,,1] <- df$gauss_red
+gauss_img[,,2] <- df$gauss_green
+gauss_img[,,3] <- df$gauss_blue
+
+# Display new images
+op <- par(
+  mai = c(0, 0, 0, 0),
+  mar = c(1, 1, 1, 1),
+  mfrow=c(2, 2),
+  bty = "n",
+  oma = c(0, 0, 0, 0),
+  omi = c(0, 0, 0, 0)
+)
+plot(
+  c(0, dims[1]),
+  c(dims[2], 0),
+  type = "n",
+  xlab = "",
+  ylab = "",
+  xaxt = "n",
+  yaxt = "n",
+  frame.plot = FALSE, 
+  main = "Original"
+)
+rasterImage(img, 0, 0, dims[1], dims[2], interpolate = FALSE)
+plot(
+  c(0, dims[1]),
+  c(dims[2], 0),
+  type = "n",
+  xlab = "",
+  ylab = "",
+  xaxt = "n",
+  yaxt = "n",
+  frame.plot = FALSE,
+  main = "PDF"
+)
+rasterImage(pdf_img, 0, 0, dims[1], dims[2], interpolate=FALSE)
+plot(
+  c(0, dims[1]),
+  c(dims[2], 0),
+  type = "n",
+  xlab = "",
+  ylab = "",
+  xaxt = "n",
+  yaxt = "n",
+  frame.plot = FALSE,
+  main = "CDF"
+)
+rasterImage(cdf_img, 0, 0, dims[1], dims[2], interpolate=FALSE)
+plot(
+  c(0, dims[1]),
+  c(dims[2], 0),
+  type = "n",
+  xlab = "",
+  ylab = "",
+  xaxt = "n",
+  yaxt = "n",
+  frame.plot = FALSE,
+  main = "Gaussian"
+)
+rasterImage(gauss_img, 0, 0, dims[1], dims[2], interpolate=FALSE)
+par(op)
+
+
+
+magic <- ggplot(data=rgb, aes(x=value, group=color, fill=color)) + 
+  geom_density(adjust=1.5, alpha=.8) + 
+  scale_fill_manual(values=c("blue", "green", "red")) +
+  ggtitle("Magically Making Distribution Look Good")
+```
+
+#### 2 dimensional transformation
+Images need to be equal dimensions
+```{r}
+filename <- "flower69.jpeg"
+img <- readJPEG(filename)
+dims <- attributes(img)$dim
+
+rgb <- array(dim=dims)
+for(k in 1:3) {
+  rgb[,,k] <- gaussian2d(img[1:dims[1], ,k], img[,1:dims[2], k])
+}
+
+
+gauss_integral <- data.frame(red=gaussian_integral(as.vector(img[,,1])),
+                             green=gaussian_integral(as.vector(img[,,2])),
+                             blue=gaussian_integral(as.vector(img[,,3])))
+gauss_integral <- gauss_integral %>%
+  pivot_longer(cols=c(red, green, blue), names_to='color')
+
+ggplot(gauss_integral, aes(x=value, group=color, colour=color)) + geom_density() +
+  scale_color_manual(values=c('blue', 'green', 'red')) +
+  ggtitle('Gaussian Integral')
+
+gauss2d <- data.frame(red=as.vector(rgb[,,1]), 
+                  green=as.vector(rgb[,,2]), 
+                  blue=as.vector(rgb[,,3]))
+gauss2d <- gauss2d %>% 
+  pivot_longer(cols=c(red, green, blue), names_to='color')
+
+ggplot(gauss2d, aes(x=value, group=color, colour=color)) + geom_density() +
+  scale_color_manual(values=c('blue', 'green', 'red')) +
+  ggtitle("2 Dimensional Gaussian Distribution")
+
+```
+
+#For Grayscale images
+```{r}
+#Make a rscript, that accepts a filename. 
+#So you can generate these graphs during the presentation
+filename <- "noisy_lady.jpeg"
+img <- readJPEG(filename)
+dims <- attributes(img)$dim
+
+
+img <- as.vector(img)
+
+effects <- data.frame(og=img, pdf=pnorm(img), cdf=dnorm(img), gauss=gaussian(img))
+
+
+# Display new images
+op <- par(
+  mai = c(0, 0, 0, 0),
+  mar = c(1, 1, 1, 1),
+  mfrow=c(2, 2),
+  bty = "n",
+  oma = c(0, 0, 0, 0),
+  omi = c(0, 0, 0, 0)
+)
+plot(
+  c(0, dims[1]),
+  c(dims[2], 0),
+  type = "n",
+  xlab = "",
+  ylab = "",
+  xaxt = "n",
+  yaxt = "n",
+  frame.plot = FALSE, 
+  main = "Original"
+)
+rasterImage(array(effects$og, dim=dims),
+            0, 0, dims[1], dims[2],
+            interpolate = FALSE)
+plot(
+  c(0, dims[1]),
+  c(dims[2], 0),
+  type = "n",
+  xlab = "",
+  ylab = "",
+  xaxt = "n",
+  yaxt = "n",
+  frame.plot = FALSE,
+  main = "PDF"
+)
+rasterImage(array(effects$pdf, dim=dims),
+            0, 0, dims[1], dims[2], interpolate=FALSE)
+plot(
+  c(0, dims[1]),
+  c(dims[2], 0),
+  type = "n",
+  xlab = "",
+  ylab = "",
+  xaxt = "n",
+  yaxt = "n",
+  frame.plot = FALSE,
+  main = "CDF"
+)
+rasterImage(array(effects$cdf, dim=dims),
+            0, 0, dims[1], dims[2], interpolate=FALSE)
+plot(
+  c(0, dims[1]),
+  c(dims[2], 0),
+  type = "n",
+  xlab = "",
+  ylab = "",
+  xaxt = "n",
+  yaxt = "n",
+  frame.plot = FALSE,
+  main = "Gaussian"
+)
+rasterImage(array(effects$gauss, dim=dims), 
+            0, 0, dims[1], dims[2], interpolate=FALSE)
+par(op)
+
+```
+
