@@ -43,9 +43,10 @@ int main(int argc, char **argv) {
 		fprintf(stderr, "Reading the jpeg failed\n"); 
 		exit(EXIT_FAILURE); 
 	}
+	//Apply blur filter to image
 	struct kernel *kern = init_kernel(5);
-	struct image *blur = convolute(blur, kern);
-	int ret = compress_image(img);
+	struct image *blur = convolute(img, kern);
+	int ret = compress_image(blur);
 	if(!ret) {
 		fprintf(stderr, "Writing to jpeg failed\n");
 		exit(EXIT_FAILURE); 

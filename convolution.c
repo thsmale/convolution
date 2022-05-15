@@ -38,7 +38,8 @@ void pad_image(struct image *img, int pad_size) {
 	for(int k = 0; k < img->components; ++k) {
 		img->pixels[k] = realloc(img->pixels[k], sizeof(double*) * new_height);
 		for(int i = 0; i < new_height; ++i) {
-			img->pixels[k][i] = realloc(img->pixels[k][i], sizeof(double) * new_width);
+			img->pixels[k][i] = 
+				realloc(img->pixels[k][i], sizeof(double) * new_width);
 		}
 	}
 	//Shift pixels pad_size in x and y direction
@@ -94,8 +95,6 @@ struct image* convolute(struct image *img, struct kernel *kern) {
 	int components = img->components;
 	//Allocate memory for filtered image
 	struct image *new_img = malloc(sizeof(struct image));
-	//Zero padding
-	pad_image(img, pad_size(kern)); 
 	new_img->height = height;
 	new_img->width = width;
 	new_img->components = components; 
@@ -109,6 +108,8 @@ struct image* convolute(struct image *img, struct kernel *kern) {
 			new_pixels[k][i] = malloc(sizeof(double) * new_img->width);
 		}
 	}
+	//Zero padding
+	pad_image(img, pad_size(kern)); 
 	//Convolution
 	for(int k = 0; k < components; k++) {
 		for(int i = 0; i < height; i++) { 
