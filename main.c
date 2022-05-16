@@ -4,12 +4,10 @@
 #include <string.h>
 #include <ctype.h>
 #include <dirent.h>
+#include "data.h"
 #include "fio.h"
 #include "convolution.h"
 #include "debug.h"
-#include "data.h"
-
-
 
 int main(int argc, char **argv) {
 	//Verify command line arguments
@@ -45,21 +43,16 @@ int main(int argc, char **argv) {
 	}
 	//Apply blur filter to image
 	struct kernel *kern = init_kernel(5);
-	struct image *blur = convolute(img, kern);
-	int ret = compress_image(blur);
+	struct image *blur_img = blur(img, kern);
+	int ret = compress_image(blur_img);
 	if(!ret) {
 		fprintf(stderr, "Writing to jpeg failed\n");
 		exit(EXIT_FAILURE); 
 	}
-	//TODO: Invalid free of triple pointer
-	/*
-	free(blur->pixels);
-	free(blur);
-	free(img->pixels); 
-	free(kern->values);
-	free(img); 
-	free(kern);
-	*/
+	//Free memory
+	destroy_img(img); 
+	destroy_img(blur_img);
+	destroy_kernel(kern);
 	return 0; 
 }
 

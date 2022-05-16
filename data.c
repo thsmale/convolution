@@ -110,6 +110,7 @@ struct kernel* init_kernel(int size) {
 	if(size % 2 == 0)
 		return NULL;
 	//Alloc memory for int_kernel
+	//A 2d array for x values and y values
 	double ***init_kernel = malloc(sizeof(double*) * size);
 	for(int i = 0; i < size; ++i) {
 		init_kernel[0] = malloc(sizeof(double*) * size);
@@ -152,9 +153,60 @@ struct kernel* init_kernel(int size) {
 			k[i][j] *= 1.0 / sum; 
 		}
 	}
+	//Free memory from init kernel
+	for(int k = 0; k < 2; k++) {
+		for(int i = 0; i < size; ++i) {
+			free(init_kernel[k][i]);
+		}
+		free(init_kernel[k]); 
+	}
 	free(init_kernel);
 	struct kernel *kern = malloc(sizeof(struct kernel));
 	kern->size = size; 
 	kern->values = k; 
 	return kern;
 }
+
+//Free img pixels like rows, cols, and channels
+//Then destory the img structure itself
+void destroy_img(struct image *img) {
+	int height = img->height;
+	int width = img->width;
+	int components = img->components;
+	for(int k = 0; k < components; k++) {
+		for(int i = 0; i < height; ++i) {
+			free(img->pixels[k][i]);
+		}
+		free(img->pixels[k]);
+	}
+	free(img->pixels);
+	free(img);
+}
+
+//Deallocate memory for kernel
+void destroy_kernel(struct kernel *kern) {
+	for(int i = 0; i < kern->size; ++i) {
+		free(kern->values[i]);
+	}
+	free(kern->values); 
+	free(kern);
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

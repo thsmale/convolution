@@ -11,11 +11,12 @@
 #include <jerror.h>
 #include <errno.h>
 #include <string.h>
+#include "data.h"
 #include "convolution.h"
 #include "debug.h"
-#include "data.h"
 
 struct image* decompress_jpeg(char *filename); 
 int compress_image(struct image *img);
+void free_JSAMPIMAGE(JSAMPIMAGE img, struct image *info);
 
 #endif

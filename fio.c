@@ -43,7 +43,7 @@ struct image* decompress_jpeg(char *filename) {
 	//Clean up your mess, deallocate memory
 	(void) jpeg_finish_decompress(&cinfo); 
 	jpeg_destroy_decompress(&cinfo); 
-	free(pixels);
+	free_JSAMPIMAGE(pixels, img);
 	fclose(fd); 
 	return img; 
 }
@@ -90,10 +90,26 @@ int compress_image(struct image *img) {
 
 	jpeg_destroy_compress(&cinfo);
 
-	free(temp);
+	free_JSAMPIMAGE(temp, img);
+	for(int i = 0; i < height; ++i) {
+		free(buffer[i]);
+	}
 	free(buffer);
 
 	return 1;
 }
 
+//Info contains information like height,width,components
+//Use it so we know how much space to clear
+void free_JSAMPIMAGE(JSAMPIMAGE img, struct image *info) {
+	int components = info->components;
+	int height = info->height;
+	for(int k = 0; k < components; k++) {
+		for(int i = 0; i < height; ++i) {
+			free(img[k][i]);
+		}
+		free(img[k]);
+	}
+	free(img);
 
+}

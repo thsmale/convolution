@@ -75,12 +75,10 @@ double sum(int k, int i, int j, struct image *img, struct kernel *kern) {
 	double product = 0.;
 	for(int m = 0; m < kern->size; m++) {
 		for(int n = 0; n < kern->size; n++) {
-			//printf("i=%i m=%i n=%i [%i][%i]\n", i, m, n, i+m, j+n); 
 			product = img->pixels[k][i+m][j+n] * kern->values[m][n];	
 			sum += product;
 		}
 	}
-	//printf("\n");
 	if(sum > 1.00000000000000)
 		sum = 1.0;
 	return sum;
@@ -89,7 +87,7 @@ double sum(int k, int i, int j, struct image *img, struct kernel *kern) {
 //Place anchor over pixel
 //Multiply respective kernel values by those in image
 //Sum all these values! 
-struct image* convolute(struct image *img, struct kernel *kern) {
+struct image* blur(struct image *img, struct kernel *kern) {
 	int height = img->height;
 	int width = img->width;
 	int components = img->components;
@@ -108,17 +106,71 @@ struct image* convolute(struct image *img, struct kernel *kern) {
 			new_pixels[k][i] = malloc(sizeof(double) * new_img->width);
 		}
 	}
+	new_img->pixels = new_pixels;
 	//Zero padding
 	pad_image(img, pad_size(kern)); 
+	//Determine number of threads to use
+	//Ideally each thread has the same amount of work
+	int num_threads = 0;
+	if(NUM_THREADS > height)
+		num_threads = 1;
+	else 
+		num_threads = NUM_THREADS;
+	pthread_t threads[num_threads];
+	struct thread_params_t thread_params[num_threads];
+	int work = height / num_threads;
+	for(int i = 0; i < num_threads; ++i) {
+		thread_params[i].id = i;
+		thread_params[i].work = work;
+		thread_params[i].num_threads = num_threads;
+		thread_params[i].img = img; 
+		thread_params[i].new_img = new_img; 
+		thread_params[i].kern = kern;
+		pthread_create(&threads[i], 
+				NULL, 
+				convolution,
+				(void*)&thread_params[i]);
+	}	
+	for(int i = 0; i < num_threads; ++i)
+		pthread_join(threads[i], NULL);
+	//Configure filtered image structure
+	return new_img;
+}
+
+//A multi threaded convolution function
+//Each thread convolutes x amount of rows
+void *convolution(void *thread_args) {
+	struct thread_params_t *params;
+	params = (struct thread_params_t *)thread_args;
+	struct image *img = params->img; 
+	struct image *new_img = params->new_img; 
+	struct kernel *kern = params->kern; 
+	double ***new_pixels = new_img->pixels;
+	int id = params->id; 
+	int work = params->work;
+	int components = img->components;
+	int width = img->width;
+	int start = id*work;
+	int end = 0;
+	int num_threads = params->num_threads;
+	//Sometimes num_threads can not evenly divide the amount of work
+	//This ensures the entire image is convoluted no matter what
+	if(id == num_threads-1)
+		end = new_img->height;
+	else 
+		end = id*work+work;
+
+	printf("Hello from thread %i doing work %i-%i\n",
+			id, start, end);
 	//Convolution
 	for(int k = 0; k < components; k++) {
-		for(int i = 0; i < height; i++) { 
+		for(int i = start; i < end; i++) { 
 			for(int j = 0; j < width; ++j) {
 				new_pixels[k][i][j] = sum(k, i, j, img, kern);
 			}
 		}
 	}
-	//Configure filtered image structure
-	new_img->pixels = new_pixels;
-	return new_img;
+	//We don't actually wan't to return anything
+	//Only modifying new_img and it's changes are made on heap
+	return NULL;
 }
