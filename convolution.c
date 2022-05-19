@@ -84,10 +84,11 @@ double sum(int k, int i, int j, struct image *img, struct kernel *kern) {
 	return sum;
 }
 
+//A function for multithreading convolutions
 //Place anchor over pixel
 //Multiply respective kernel values by those in image
 //Sum all these values! 
-struct image* blur(struct image *img, struct kernel *kern) {
+struct image* hyper_con(struct image *img, struct kernel *kern) {
 	int height = img->height;
 	int width = img->width;
 	int components = img->components;
@@ -160,7 +161,7 @@ void *convolution(void *thread_args) {
 	else 
 		end = id*work+work;
 
-	printf("Hello from thread %i doing work %i-%i\n",
+	printf("Hello from thread %i convoluting rows %i-%i\n",
 			id, start, end);
 	//Convolution
 	for(int k = 0; k < components; k++) {
@@ -173,4 +174,30 @@ void *convolution(void *thread_args) {
 	//We don't actually wan't to return anything
 	//Only modifying new_img and it's changes are made on heap
 	return NULL;
+}
+
+//Writes new image to images/output
+int blur(char *file) {
+	//Read file
+	struct image *img = decompress_jpeg(file); 
+	if(img == NULL) {
+		fprintf(stderr, "Reading the jpeg failed\n"); 
+		return -1; 
+	}
+	//Apply blur filter to image
+	struct kernel *kern = init_kernel(5);
+	struct image *blur_img = hyper_con(img, kern);
+	//Write image to disk
+	blur_img->name = get_filename(file);
+	int ret = compress_image(blur_img);
+	if(!ret) {
+		fprintf(stderr, "Writing to jpeg failed\n");
+		return -1;
+	}
+	//Free memory
+	destroy_img(img); 
+	free(blur_img->name);
+	destroy_img(blur_img);
+	destroy_kernel(kern);
+	return 1;
 }

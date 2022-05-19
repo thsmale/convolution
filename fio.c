@@ -1,5 +1,79 @@
 #include "fio.h"
 
+//Read a directory and return if successful 
+void read_dir(char *dirname) {
+	DIR *dirp; 
+	struct dirent *file;
+	char *filename;
+	char *parent = ".\0"; 
+	char *cur = "..\0";
+	dirp = opendir(dirname);
+	if(dirp == NULL)
+		return;
+	while((file = readdir(dirp)) != NULL) {
+		filename = file->d_name; 
+		if(file->d_type == DT_REG) {
+			//Regular file
+			printf("%s ", filename);
+			/*
+			if(!blur(filename)) {
+				printf(stderr, "Unable to read %s\n", filename);
+			}
+			*/
+		}
+		if(file->d_type == DT_DIR) {
+			//Directory
+			//readdir includes . and .. when reading
+			if(strcmp(filename, parent) == 0) 
+				continue;
+			if(strcmp(filename, cur) == 0) 
+				continue;
+			//Initialize filepath to new dir
+			if(dirname[strlen(dirname)-1] != '/')
+				strcat(dirname, "/\0");
+			//Alloc enough memory
+			int new_len = strlen(dirname) + strlen(filename);
+			char *new_dir = malloc(sizeof(char) * new_len);
+			strcat(new_dir, dirname);
+			strcat(new_dir, filename);
+			printf("\n\n\n%s\n", new_dir);
+			read_dir(new_dir);
+			free(new_dir);
+		}
+	}
+}
+
+//Input is possibly a full filepath
+//Extract everything the name of the image
+char* get_filename(char *file) {
+	char *filename = malloc(sizeof(char) * 256); 
+	char *sep = "/\0"; 
+	file = strtok(file, sep);
+	while(file != NULL) {
+		strcpy(filename, file);
+		file = strtok(NULL, sep); 
+	}
+	return filename; 
+}
+
+//Ensure file extension is jpeg or jpg
+int valid_ext(char *filename) {
+	char *file_cp = malloc(strlen(filename)+1); 
+	strcpy(file_cp, filename); 
+	char *ext = strtok(file_cp, "."); 
+	ext = strtok(NULL, "."); 
+	size_t ext_len = strlen(ext);
+	for(int i = 0; i < ext_len; ++i) {
+		ext[i] = toupper(ext[i]); 
+	}
+	char jpeg[5] = "JPEG\0"; 
+	char jpg[4] = "JPG\0";
+	if(strcmp(ext, jpeg) != 0 && strcmp(ext, jpg) != 0) {
+		return -1;
+	}
+	return 1; 
+}
+
 //JSAMPROW: row of pixels - red, green, blue order
 //JSAMPARRAY: pointer to rows equal to height of image
 //JSAMPIMAGE is equal to num of components each pointing to a JSAMPARRAY
@@ -50,52 +124,56 @@ struct image* decompress_jpeg(char *filename) {
 
 //pixels from the image we decompressed 
 //old_cinfo is info about the image we read from input 
+//writes output image to images/output/
 int compress_image(struct image *img) {
 	struct jpeg_compress_struct cinfo;
 	struct jpeg_error_mgr jerr; 
-	FILE * outfile; 
-
+	FILE * fd; 
 	cinfo.err = jpeg_std_error(&jerr);
 	jpeg_create_compress(&cinfo);
-
-	char *filename = "myimage.jpeg\0"; 
-	outfile = fopen(filename, "wb"); 
-	if(filename == NULL) {
-		fprintf(stderr, "can't open %s\n", filename); 
+	//Open a binary byte stream to a file
+	char *outfile= malloc(sizeof(char) * 256);
+	strcpy(outfile, "output/\0");
+	outfile = realloc(outfile, sizeof(char) * strlen(img->name));
+	strcat(outfile, img->name);
+	fd = fopen(outfile, "wb"); 
+	if(fd == NULL) {
+		fprintf(stderr, "can't open %s\n", outfile); 
 		return -1; 
 	}
-	jpeg_stdio_dest(&cinfo, outfile);
-
+	jpeg_stdio_dest(&cinfo, fd);
+	//libjpeg structure for containing JPEG params
 	cinfo.image_height = img->height;
 	cinfo.image_width = img->width;
 	cinfo.input_components = img->components;
 	cinfo.in_color_space = img->color_space;
-	
+	//Set compression parameters
+	//Parameters depend on image color_space
 	jpeg_set_defaults(&cinfo);
 	jpeg_set_defaults(&cinfo);
 	jpeg_set_quality(&cinfo, 99, 1);
-
+	//Compress the image!
 	jpeg_start_compress(&cinfo, 1);
 	int components= img->components;
 	int height = img->height;
 	int width = img->width;
 	JSAMPIMAGE temp = descale_pixels(img);
 	JSAMPARRAY buffer = deformat_pixels(temp, img);
+	//Write to the file one scanline at a time (slow)
+	//TODO: Increase bandwidth
 	while(cinfo.next_scanline < cinfo.image_height) {
 		(void) jpeg_write_scanlines(&cinfo, &buffer[cinfo.next_scanline], 1);
 	}
-
+	//Free memory
 	jpeg_finish_compress(&cinfo);
-	fclose(outfile);
-
+	free(outfile);
+	fclose(fd);
 	jpeg_destroy_compress(&cinfo);
-
 	free_JSAMPIMAGE(temp, img);
 	for(int i = 0; i < height; ++i) {
 		free(buffer[i]);
 	}
 	free(buffer);
-
 	return 1;
 }
 

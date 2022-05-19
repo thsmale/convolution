@@ -8,6 +8,7 @@
 #include "convolution.h"
 
 struct image {
+	char *name;
 	int width; 
 	int height;
 	int components; 

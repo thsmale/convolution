@@ -1,5 +1,5 @@
 ---
-title: "Image Edge Detection"
+title: "Image Filtering"
 author: "Thomas Smale"
 date: "5/7/2022"
 output: pdf_document
@@ -15,7 +15,112 @@ library(jpeg)
 library(plotly)
 library(reticulate)
 use_python('/usr/local/bin/python3')
-setwd("~/classroom/csci551/final_project")
+```
+
+# Intro
+
+Images have important applications in computer vision models. Images are represented in a computer using tensors or arrays. An image will be a matrix expressing its height, width, and number of components. The number of components determines if the image is colored or gray scale. Colored images may have 3 components, red, green, and blue. Gray scale images will have one component. The pixels in an image can range from [0, 1], [0, 255], or other options depending on it's configuration. 0 will mean the pixel has no red at that element and the max value like 1 will mean it's completely red. 
+
+# Rotating images
+
+Here we are reading in an image and formatting as a 3 dimensional array. There are three components, for red, green, and blue. Each component is a 2 dimensional array with width 159 and height 240. By using techniques like the transpose of a matrix we are able to rotate the image. 
+
+```{r}
+#Clockwise rotations
+img <- readJPEG('images/mud.jpeg')
+dims <- dim(img)
+red <- img[,,1]
+green <- img[,,2]
+blue <- img[,,3]
+#90 degrees 
+#Reverse order of rows, take transpose
+r <- t(red[nrow(red):1,])
+g <- t(green[nrow(green):1,])
+b <- t(blue[nrow(blue):1,])
+ninety <- array(c(r, g, b), dim=c(dim(b), 3))
+#180 degrees 
+#Reverse order of rows and cols
+r <- red[nrow(red):1, ncol(red):1]
+g <- green[nrow(green):1, ncol(green):1]
+b <- blue[nrow(blue):1, ncol(blue):1]
+oneeighty <- array(c(r, g, b), dim=c(dim(b), 3))
+#270 degrees 
+#Take transpose, reverse column order
+r <- t(red)[ncol(red):1,]
+g <- t(green)[ncol(green):1,]
+b <- t(blue)[ncol(blue):1,]
+twoseventy <- array(c(r, g, b), dim=c(dim(b), 3))
+```
+
+```{r include=FALSE}
+# Display new images
+# Layout new settings
+layout <- c(2,2)
+op <- par(
+  mar = c(1, 1, 1, 1),
+  mfrow = layout,
+  bty = "n",
+  omi = c(0, 0, 0, 0), 
+  oma = c(0, 0, 2, 0)
+)
+#First image
+dims <- dim(img)
+plot(
+  c(0, dims[1]),
+  c(dims[2], 0),
+  type = "n",
+  xlab = "",
+  ylab = "",
+  xaxt = "n",
+  yaxt = "n",
+  frame.plot = FALSE,
+  main = "Original"
+)
+rasterImage(img, 0, 0, dims[1], dims[2], interpolate = FALSE)
+#Second image
+dims <- dim(ninety)
+plot(
+  c(0, dims[1]),
+  c(dims[2], 0),
+  type = "n",
+  xlab = "",
+  ylab = "",
+  xaxt = "n",
+  yaxt = "n",
+  frame.plot = FALSE,
+  main = "90"
+)
+rasterImage(ninety, 0, 0, dims[1], dims[2], interpolate = FALSE)
+#Third image
+dims <- dim(oneeighty)
+plot(
+  c(0, dims[1]),
+  c(dims[2], 0),
+  type = "n",
+  xlab = "",
+  ylab = "",
+  xaxt = "n",
+  yaxt = "n",
+  frame.plot = FALSE,
+  main = "180"
+)
+rasterImage(oneeighty, 0, 0, dims[1], dims[2], interpolate = FALSE)
+#Fourth image
+dims <- dim(twoseventy)
+plot(
+  c(0, dims[1]),
+  c(dims[2], 0),
+  type = "n",
+  xlab = "",
+  ylab = "",
+  xaxt = "n",
+  yaxt = "n",
+  frame.plot = FALSE,
+  main = "270"
+)
+rasterImage(twoseventy, 0, 0, dims[1], dims[2], interpolate = FALSE)
+mtext(text="Clockwise Rotations", outer=TRUE, cex=1.5)
+par(op)
 ```
 
 # Gaussian Distribution aka Normal Distribution
@@ -169,59 +274,57 @@ Here x is the input image and y is the output which is the new image. H is the k
 
 When applying a 2d convolution using a gaussian filter it reduces the noise in the image. This gives the effect of blurring the image. 
 
-### Results from applying Blur
-```{python}
-import numpy as np
-import cv2 as cv
-from matplotlib import pyplot as plt
-
-fig, axs = plt.subplots(2, 3)
-
-img = cv.imread('images/noisy_lady.jpeg')
-
-weight = 5.5
-blur = cv.GaussianBlur(img, (5,5), sigmaX=weight, sigmaY=weight)
-
-myblur = cv.imread('my_noisy_lady.jpeg')
-
-axs[0, 0].imshow(img)
-axs[0, 0].set_title("Original")
-axs[0, 0].set_xticks([])
-axs[0, 0].set_yticks([])
-
-axs[0, 1].imshow(blur)
-axs[0, 1].set_title("Python Gaussian")
-axs[0, 1].set_xticks([])
-axs[0, 1].set_yticks([])
-
-axs[0, 2].imshow(myblur)
-axs[0, 2].set_title("My Gauss")
-axs[0, 2].set_xticks([])
-axs[0, 2].set_yticks([])
-
-img = cv.imread('images/noisy.jpeg')
-
-weight = 5.5
-blur = cv.GaussianBlur(img, (5,5), sigmaX=weight, sigmaY=weight)
-
-myblur = cv.imread('my_noisy.jpeg')
-
-axs[1, 0].imshow(img)
-axs[1, 0].set_xticks([])
-axs[1, 0].set_yticks([])
-
-axs[1, 1].imshow(blur)
-axs[1, 1].set_xticks([])
-axs[1, 1].set_yticks([])
-
-axs[1, 2].imshow(myblur)
-axs[1, 2].set_xticks([])
-axs[1, 2].set_yticks([])
-
-plt.show()
+##Graph image 
+```{r}
+mygauss <- function(x, y) {
+  weight <- 5.5
+  part1 <- 1 / (2*pi*(weight^2))
+  part2 <- exp(1)^((-(x^2+y^2))/(2*(weight^2)))
+  return(part1*part2)
+}
+img <- readJPEG('images/dandelion.jpeg')
+red <- img[,,1]
+green <- img[,,2]
+blue <- img[,,3]
+df <- data.frame(red=c(red), green=c(green), blue=c(blue))
+df <- pivot_longer(df, cols=c('red', 'green', 'blue'), names_to = 'color')
+ggplot(df, aes(x=value, group=color, colour=color)) + 
+  geom_density(kernel='gaussian') +
+  scale_color_manual(values=c('blue', 'green', 'red')) + 
+  ggtitle('Pixel Density')
+r <- conv2(red, z1, 'valid')
+g <- conv2(green, z1, 'valid')
+b <- conv2(blue, z1, 'valid')
+rgb <- array(dim=c(dim(b), 3))
+rgb[,,1] <- r
+rgb[,,2] <- g
+rgb[,,3] <- b
 ```
 
-
+```{r}
+layout <- c(1,1)
+op <- par(
+  mar = c(1, 1, 1, 1),
+  mfrow = layout,
+  bty = "n",
+  omi = c(0, 0, 0, 0)
+)
+#First image
+dims <- dim(rgb)
+plot(
+  c(0, dims[1]),
+  c(dims[2], 0),
+  type = "n",
+  xlab = "",
+  ylab = "",
+  xaxt = "n",
+  yaxt = "n",
+  frame.plot = FALSE,
+  main = "Gaussian Blur"
+)
+rasterImage(rgb, 0, 0, dims[1], dims[2], interpolate = FALSE)
+par(op)
+```
 
 
 Working with Uniform Distribution.  
@@ -252,16 +355,6 @@ Quantiles
 CDF: Cumulative Distribution Function
 
 ```{r}
-cone <- function(x, y) {
-  sqrt(x^2+y^2)
-}
-x <- y <- seq(-1, 1, length=20)
-z <- outer(x, y, cone)
-```
-
-
-
-```{r}
 x <- seq(-10, 10, by=.1)
 distributions <- data.frame(x, 
                             probability=pnorm(x), 
@@ -282,338 +375,3 @@ grid.arrange(pdf, cdf)
 rand <- ggplot(mapping=aes(x=rnorm(100), fill="orange")) + geom_density() + 
   ggtitle("Random distribution")
 ```
-
-### CLT 
-```{r}
-#Pixel color and width of the row
-clt <- function(color) {
-  num_samples <- 25
-  num_averages <- 1000
-  averages <- rep(0.69, 1, num_averages)
-  for(i in 1:num_averages) {
-    averages[i] <- mean(sample(x, num_samples, replace=TRUE))
-  }
-  return(averages)
-}
-```
-
-
-### Image
-
-Analysis of a random image
-
-This shows a distribution of the pixels. 
-
-Can you spot the edges from the Gaussian Distribution?
-
-You can spot where the row starts and ends
-```
-Rscript pixel_density.r filename
-```
-
-Gaussian filter: To remove noise in image
-
-### 1 dimensional transformations
-
-```{r}
-#Make a rscript, that accepts a filename. 
-#So you can generate these graphs during the presentation
-filename <- "images/dandelion.jpeg"
-img <- readJPEG(filename)
-dims <- attributes(img)$dim
-
-if(dims[3] != 3) {
-  print("This could be more flexible. I'll do it later")
-  stop("Channels not RGB")
-}
-
-
-
-rgb <- data.frame(red=as.vector(img[,,1]),
-                  green=as.vector(img[,,2]),
-                  blue=as.vector(img[,,3]))
-rgb <- rgb %>% 
-  pivot_longer(cols=c("red", "green", "blue"), names_to="color")
-
-pdf <- rgb %>% 
-  group_by(color) %>%
-  mutate(pdf=pnorm(value)) %>%
-  ggplot(mapping=aes(1:nrow(rgb), y=pdf, group=color, colour=color)) +
-  geom_line() +
-  scale_color_manual(values=c("blue", "green", "red")) +
-  ggtitle("Probability Density Function of Image Rows") +
-  facet_wrap(vars(color), ncol=1)
-
-cdf <- rgb %>% 
-  group_by(color) %>%
-  mutate(cdf=dnorm(value)) %>%
-  ggplot(mapping=aes(1:nrow(rgb), y=cdf, group=color, colour=color)) +
-  geom_line() +
-  scale_color_manual(values=c("blue", "green", "red")) +
-  ggtitle("Cumulative Distribution Function of Image Rows") +
-  facet_wrap(vars(color), ncol=1)
-
-#This graph is hot garbage because density is smoothing values for us
-gauss <- rgb %>%
-  group_by(color) %>%
-  mutate(gauss=gaussian(value)) %>%
-  ggplot() +
-  geom_density(aes(x=gauss, group=color, colour=color)) +
-  geom_density(aes(x=value, group=color)) +
-  scale_color_manual(values=c('blue', 'green', 'red')) +
-  ggtitle('Gaussian function of Image Rows') +
-  facet_wrap(vars(color), ncol=1, scales="free_y")
-
-#Format dataframe
-df <- rgb %>% 
-  group_by(color) %>%
-  mutate(pdf=pnorm(value),
-         cdf=dnorm(value), 
-         gauss=gaussian(value),
-         row=row_number()) %>% 
-  select(-value) %>%
-  pivot_wider(names_from=color, values_from = c(pdf, cdf, gauss)) %>%
-  select(-row)
-
-
-pdf_img <- array(dim=dims)
-pdf_img[,,1] <- df$pdf_red
-pdf_img[,,2] <- df$pdf_green
-pdf_img[,,3] <- df$pdf_blue
-
-cdf_img <- array(dim=dims)
-cdf_img[,,1] <- df$cdf_red
-cdf_img[,,2] <- df$cdf_green
-cdf_img[,,3] <- df$cdf_blue
-
-gauss_img <- array(dim=dims)
-gauss_img[,,1] <- df$gauss_red
-gauss_img[,,2] <- df$gauss_green
-gauss_img[,,3] <- df$gauss_blue
-
-# Display new images
-op <- par(
-  mai = c(0, 0, 0, 0),
-  mar = c(1, 1, 1, 1),
-  mfrow=c(2, 2),
-  bty = "n",
-  oma = c(0, 0, 0, 0),
-  omi = c(0, 0, 0, 0)
-)
-plot(
-  c(0, dims[1]),
-  c(dims[2], 0),
-  type = "n",
-  xlab = "",
-  ylab = "",
-  xaxt = "n",
-  yaxt = "n",
-  frame.plot = FALSE, 
-  main = "Original"
-)
-rasterImage(img, 0, 0, dims[1], dims[2], interpolate = FALSE)
-plot(
-  c(0, dims[1]),
-  c(dims[2], 0),
-  type = "n",
-  xlab = "",
-  ylab = "",
-  xaxt = "n",
-  yaxt = "n",
-  frame.plot = FALSE,
-  main = "PDF"
-)
-rasterImage(pdf_img, 0, 0, dims[1], dims[2], interpolate=FALSE)
-plot(
-  c(0, dims[1]),
-  c(dims[2], 0),
-  type = "n",
-  xlab = "",
-  ylab = "",
-  xaxt = "n",
-  yaxt = "n",
-  frame.plot = FALSE,
-  main = "CDF"
-)
-rasterImage(cdf_img, 0, 0, dims[1], dims[2], interpolate=FALSE)
-plot(
-  c(0, dims[1]),
-  c(dims[2], 0),
-  type = "n",
-  xlab = "",
-  ylab = "",
-  xaxt = "n",
-  yaxt = "n",
-  frame.plot = FALSE,
-  main = "Gaussian"
-)
-rasterImage(gauss_img, 0, 0, dims[1], dims[2], interpolate=FALSE)
-par(op)
-
-
-
-magic <- ggplot(data=rgb, aes(x=value, group=color, fill=color)) + 
-  geom_density(adjust=1.5, alpha=.8) + 
-  scale_fill_manual(values=c("blue", "green", "red")) +
-  ggtitle("Magically Making Distribution Look Good")
-```
-
-#### 2 dimensional transformation
-Images need to be equal dimensions
-```{r}
-filename <- "images/flower69.jpeg"
-img <- readJPEG(filename)
-dims <- attributes(img)$dim
-
-rgb <- array(dim=dims)
-for(k in 1:3) {
-  rgb[,,k] <- gaussian2d(img[1:dims[1], ,k], img[,1:dims[2], k])
-}
-
-
-gauss_integral <- data.frame(red=gaussian_integral(as.vector(img[,,1])),
-                             green=gaussian_integral(as.vector(img[,,2])),
-                             blue=gaussian_integral(as.vector(img[,,3])))
-gauss_integral <- gauss_integral %>%
-  pivot_longer(cols=c(red, green, blue), names_to='color')
-
-ggplot(gauss_integral, aes(x=value, group=color, colour=color)) + geom_density() +
-  scale_color_manual(values=c('blue', 'green', 'red')) +
-  ggtitle('Gaussian Integral')
-
-gauss2d <- data.frame(red=as.vector(rgb[,,1]), 
-                  green=as.vector(rgb[,,2]), 
-                  blue=as.vector(rgb[,,3]))
-gauss2d <- gauss2d %>% 
-  pivot_longer(cols=c(red, green, blue), names_to='color')
-
-ggplot(gauss2d, aes(x=value, group=color, colour=color)) + geom_density() +
-  scale_color_manual(values=c('blue', 'green', 'red')) +
-  ggtitle("2 Dimensional Gaussian Distribution")
-
-```
-
-#For Grayscale images
-```{r}
-#Make a rscript, that accepts a filename. 
-#So you can generate these graphs during the presentation
-filename <- "images/noisy_lady.jpeg"
-img <- readJPEG(filename)
-dims <- attributes(img)$dim
-
-
-img <- as.vector(img)
-
-effects <- data.frame(og=img, pdf=pnorm(img), cdf=dnorm(img), gauss=gaussian(img))
-
-
-# Display new images
-op <- par(
-  mai = c(0, 0, 0, 0),
-  mar = c(1, 1, 1, 1),
-  mfrow=c(2, 2),
-  bty = "n",
-  oma = c(0, 0, 0, 0),
-  omi = c(0, 0, 0, 0)
-)
-plot(
-  c(0, dims[1]),
-  c(dims[2], 0),
-  type = "n",
-  xlab = "",
-  ylab = "",
-  xaxt = "n",
-  yaxt = "n",
-  frame.plot = FALSE, 
-  main = "Original"
-)
-rasterImage(array(effects$og, dim=dims),
-            0, 0, dims[1], dims[2],
-            interpolate = FALSE)
-plot(
-  c(0, dims[1]),
-  c(dims[2], 0),
-  type = "n",
-  xlab = "",
-  ylab = "",
-  xaxt = "n",
-  yaxt = "n",
-  frame.plot = FALSE,
-  main = "PDF"
-)
-rasterImage(array(effects$pdf, dim=dims),
-            0, 0, dims[1], dims[2], interpolate=FALSE)
-plot(
-  c(0, dims[1]),
-  c(dims[2], 0),
-  type = "n",
-  xlab = "",
-  ylab = "",
-  xaxt = "n",
-  yaxt = "n",
-  frame.plot = FALSE,
-  main = "CDF"
-)
-rasterImage(array(effects$cdf, dim=dims),
-            0, 0, dims[1], dims[2], interpolate=FALSE)
-plot(
-  c(0, dims[1]),
-  c(dims[2], 0),
-  type = "n",
-  xlab = "",
-  ylab = "",
-  xaxt = "n",
-  yaxt = "n",
-  frame.plot = FALSE,
-  main = "Gaussian"
-)
-rasterImage(array(effects$gauss, dim=dims), 
-            0, 0, dims[1], dims[2], interpolate=FALSE)
-par(op)
-
-```
-
-
-# Plotting the image in 3d 
-
-```{r}
-
-plot_image <- function() {
-  op <- par(
-    mai = c(0, 0, 0, 0),
-    mar = c(1, 1, 1, 1),
-    mfrow = c(2, 2),
-    bty = "n",
-    oma = c(0, 0, 0, 0),
-    omi = c(0, 0, 0, 0)
-  )
-  plot(
-    c(0, dims[1]),
-    c(dims[2], 0),
-    type = "n",
-    xlab = "",
-    ylab = "",
-    xaxt = "n",
-    yaxt = "n",
-    frame.plot = FALSE,
-    main = "Original"
-  )
-  rasterImage(array(effects$og, dim = dims),
-              0, 0, dims[1], dims[2],
-              interpolate = FALSE)
-  par(op)
-}
-
-filename <- "images/mud.jpeg"
-img <- readJPEG(filename)
-dims <- attributes(img)$dim
-
-red <- img[, , 1]
-
-plot_ly(x=red[1,], y=red[,1], z=red) %>%
-  add_surface()
-
-# Display new images
-
-```
-

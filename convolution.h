@@ -11,6 +11,7 @@
 #include <pthread.h>
 #include "data.h"
 #include "debug.h"
+#include "fio.h"
 
 #define PI 3.14159265359
 #define NUM_THREADS 4
@@ -24,7 +25,8 @@ struct thread_params_t;
 double gaussian(double x, double y);
 int output_size(int dim, int ksize, int padding, int stride);
 void pad_image(struct image *img, int pad_size);
-struct image* blur(struct image *img, struct kernel *kern);
+struct image* hyper_con(struct image *img, struct kernel *kern);
 void *convolution(void *thread_args);
+int blur(char *filename); 
 
 #endif
