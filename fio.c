@@ -1,6 +1,6 @@
 #include "fio.h"
 
-//Read a directory and return if successful 
+//Recursively read directories and blur each jpeg image in them
 void read_dir(char *dirname) {
 	DIR *dirp; 
 	struct dirent *file;

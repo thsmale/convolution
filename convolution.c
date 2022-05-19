@@ -84,6 +84,45 @@ double sum(int k, int i, int j, struct image *img, struct kernel *kern) {
 	return sum;
 }
 
+//This is a sequential implementation of a convolution
+//Place anchor of kernel over all pixels in image
+//Multiply respective kernel values by those in image
+//Sum all these values! 
+//Place new pixels into an image and return that!
+struct image* seq_con(struct image *img, struct kernel *kern) {
+	int height = img->height;
+	int width = img->width;
+	int components = img->components;
+	//Allocate memory for filtered image
+	struct image *new_img = malloc(sizeof(struct image));
+	new_img->height = height;
+	new_img->width = width;
+	new_img->components = components; 
+	new_img->color_space = img->color_space;
+	double ***new_pixels = malloc(sizeof(double*) * components);
+	for(int i = 0; i < components; ++i) {
+		new_pixels[i] = malloc(sizeof(double*) * new_img->height);
+	}
+	for(int k = 0; k < components; ++k) {
+		for(int i = 0; i < height; ++i) {
+			new_pixels[k][i] = malloc(sizeof(double) * new_img->width);
+		}
+	}
+	//Zero padding
+	pad_image(img, pad_size(kern)); 
+	//Convolution
+	for(int k = 0; k < components; k++) {
+		for(int i = 0; i < height; i++) { 
+			for(int j = 0; j < width; ++j) {
+				new_pixels[k][i][j] = sum(k, i, j, img, kern);
+			}
+		}
+	}
+	//Configure filtered image structure
+	new_img->pixels = new_pixels;
+	return new_img;
+}
+
 //A function for multithreading convolutions
 //Place anchor over pixel
 //Multiply respective kernel values by those in image
@@ -176,7 +215,7 @@ void *convolution(void *thread_args) {
 	return NULL;
 }
 
-//Writes new image to images/output
+//Writes new image to output/
 int blur(char *file) {
 	//Read file
 	struct image *img = decompress_jpeg(file); 
