@@ -225,7 +225,8 @@ int blur(char *file) {
 	}
 	//Apply blur filter to image
 	struct kernel *kern = init_kernel(5);
-	struct image *blur_img = hyper_con(img, kern);
+	struct image *blur_img = seq_con(img, kern);
+	//struct image *blur_img = hyper_con(img, kern);
 	//Write image to disk
 	blur_img->name = get_filename(file);
 	int ret = compress_image(blur_img);
