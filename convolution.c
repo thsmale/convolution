@@ -31,27 +31,74 @@ int pad_size(struct kernel *kern) {
 //Padding adds X zeros to the image 
 //X is determined by pad_size()
 //This makes convoluting the image easier
-void pad_image(struct image *img, int pad_size) {
+//Using realloc, it often returns new pointer address
+int pad_image(struct image *img, int pad_size) {
+	int old_height = img->height;
+	int old_width = img->width;
 	int new_height = (pad_size*2) + img->height; 
 	int new_width = (pad_size*2) + img->width;
-	//Reallocate more memory for the image
+	img->height = new_height;
+	img->width = new_width;
+	double ***new_pixels = malloc_pixels(img);
+	/*
 	for(int k = 0; k < img->components; ++k) {
-		img->pixels[k] = realloc(img->pixels[k], sizeof(double*) * new_height);
-		for(int i = 0; i < new_height; ++i) {
-			img->pixels[k][i] = 
-				realloc(img->pixels[k][i], sizeof(double) * new_width);
+		if(img->pixels[k] == NULL) 
+			printf("NULLLLL\n");
+		new_rows = realloc(img->pixels[k], 
+					 sizeof(double*) * new_height);
+		if(new_rows == NULL) {
+			fprintf(stderr, "row realloc out of mem\n");
+			return -1; 
 		}
-	}
-	//Shift pixels pad_size in x and y direction
-	for(int k = 0; k < img->components; ++k) {
-		for(int i = new_height-pad_size; i >= pad_size ; --i) {
-			for(int j = new_width-pad_size; j >= pad_size; --j) {
-				//printf("%i %i\n", i, j);
-				img->pixels[k][i][j] = img->pixels[k][i-pad_size][j-pad_size];
+		img->pixels[k] = new_rows; 
+		for(int i = 0; i < new_height; ++i) {
+			if(img->pixels[k][i] == NULL) { 
+				printf("null cause new rows! i = %i \
+				        img->pixels[k][i] = %p \ 
+				        new_rows[i] = %p\n", 
+					i, img->pixels[k][i], new_rows[i]);
+			}
+			new_col = realloc(img->pixels[k][i], 
+					sizeof(double) * new_width);
+			if(new_col == NULL) {
+				fprintf(stderr, "col realloc out of mem\n");
+				return -1;
+			}
+			img->pixels[k][i] = new_col; 
+			if(img->pixels[k][i] == NULL) {
+				printf("FUCK\n");
 			}
 		}
 	}
+	*/
+	for(int k = 0; k < img->components; k++) {
+		for(int i = 0; i < old_height; ++i) {
+			for(int j = 0; j < old_width; ++j) {
+				new_pixels[k][i+pad_size][j+pad_size] = 
+					img->pixels[k][i][j];
+			}
+		}
+	}
+	double ***temp = img->pixels;
+	img->pixels = new_pixels;
+	print_image(img);
+	img->pixels=temp;
+	/*
+	//Shift pixels pad_size in x and y direction
+	printf("bf shift\n");
+	for(int k = 0; k < img->components; ++k) {
+		for(int i = new_height-pad_size; i >= pad_size; --i) {
+			for(int j = new_width-pad_size; j >= pad_size; --j) {
+				img->pixels[k][i][j] = 
+					img->pixels[k][i-pad_size][j-pad_size];
+			}
+		}
+	}
+	printf("af shift\n");
+	*/
+	/*
 	//Pad with zeros
+	printf("bf pad\n");
 	for(int k = 0; k < img->components; k++) {
 		for(int i = 0; i < new_height; ++i) {
 			for(int j = 0; j < new_width; ++j) {
@@ -62,8 +109,14 @@ void pad_image(struct image *img, int pad_size) {
 			}
 		}
 	}
+	printf("af pad\n");
+	*/
+	/*
 	img->height = new_height;
 	img->width = new_width;
+	*/
+	img->pixels = new_pixels;
+	return 1; 
 }
 
 //Compute the sum by adding the product of corresponding elements 
@@ -95,25 +148,20 @@ struct image* seq_con(struct image *img, struct kernel *kern) {
 	int components = img->components;
 	//Allocate memory for filtered image
 	struct image *new_img = malloc(sizeof(struct image));
+	if(new_img == NULL) {
+		fprintf(stderr, "Failed to alloc new_img\n");
+		return NULL;
+	}
 	new_img->height = height;
 	new_img->width = width;
 	new_img->components = components; 
 	new_img->color_space = img->color_space;
-	double ***new_pixels = malloc(sizeof(double*) * components);
-	for(int i = 0; i < components; ++i) {
-		new_pixels[i] = malloc(sizeof(double*) * new_img->height);
-	}
-	for(int k = 0; k < components; ++k) {
-		for(int i = 0; i < height; ++i) {
-			new_pixels[k][i] = malloc(sizeof(double) * new_img->width);
-		}
-	}
+	double ***new_pixels = malloc_pixels(new_img); 	
+	if(new_pixels == NULL) return NULL; 
 	//Zero padding
-	printf("Before padding\n");
-	print_image(img);
-	pad_image(img, pad_size(kern)); 
-	printf("After padding\n");
-	print_image(img);
+	int ret = pad_image(img, pad_size(kern)); 
+	if(ret < 0)
+		return NULL; 
 	//Convolution
 	for(int k = 0; k < components; k++) {
 		for(int i = 0; i < height; i++) { 
@@ -137,22 +185,20 @@ struct image* hyper_con(struct image *img, struct kernel *kern) {
 	int components = img->components;
 	//Allocate memory for filtered image
 	struct image *new_img = malloc(sizeof(struct image));
+	if(new_img == NULL) {
+		fprintf(stderr, "Faield to alloc new_img\n");
+		return NULL;
+	}
 	new_img->height = height;
 	new_img->width = width;
 	new_img->components = components; 
 	new_img->color_space = img->color_space;
-	double ***new_pixels = malloc(sizeof(double*) * components);
-	for(int i = 0; i < components; ++i) {
-		new_pixels[i] = malloc(sizeof(double*) * new_img->height);
-	}
-	for(int k = 0; k < components; ++k) {
-		for(int i = 0; i < height; ++i) {
-			new_pixels[k][i] = malloc(sizeof(double) * new_img->width);
-		}
-	}
-	new_img->pixels = new_pixels;
+	new_img->pixels = malloc_pixels(new_img); 
+	if(new_img->pixels == NULL) return NULL;
 	//Zero padding
-	pad_image(img, pad_size(kern)); 
+	int ret = pad_image(img, pad_size(kern)); 
+	if(ret < 0)
+		return NULL; 
 	//Determine number of threads to use
 	//Ideally each thread has the same amount of work
 	int num_threads = 0;
@@ -204,8 +250,10 @@ void *convolution(void *thread_args) {
 	else 
 		end = id*work+work;
 
+	/*
 	printf("Hello from thread %i convoluting rows %i-%i\n",
 			id, start, end);
+			*/
 	//Convolution
 	for(int k = 0; k < components; k++) {
 		for(int i = start; i < end; i++) { 
@@ -228,9 +276,17 @@ int blur(char *file) {
 		return -1; 
 	}
 	//Apply blur filter to image
-	struct kernel *kern = init_kernel(3);
-	//struct image *blur_img = seq_con(img, kern);
-	struct image *blur_img = hyper_con(img, kern);
+	struct kernel *kern = init_kernel();
+	if(kern == NULL) {
+		fprintf(stderr, "Unable to create kernel\n");
+		return -1; 
+	}
+	struct image *blur_img = seq_con(img, kern);
+	//struct image *blur_img = hyper_con(img, kern);
+	if(blur_img == NULL) {
+		fprintf(stderr, "Failed to blur image\n");
+		return -1; 
+	}
 	//Write image to disk
 	blur_img->name = get_filename(file);
 	int ret = compress_image(blur_img);
