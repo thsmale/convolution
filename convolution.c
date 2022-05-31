@@ -32,91 +32,29 @@ int pad_size(struct kernel *kern) {
 //X is determined by pad_size()
 //This makes convoluting the image easier
 //Using realloc, it often returns new pointer address
-int pad_image(struct image *img, int pad_size) {
-	int old_height = img->height;
-	int old_width = img->width;
+//Returns a new image that is padded, destroys old one
+struct image* pad_image(struct image *img, int pad_size) {
 	int new_height = (pad_size*2) + img->height; 
 	int new_width = (pad_size*2) + img->width;
-	img->height = new_height;
-	img->width = new_width;
-	double ***new_pixels = malloc_pixels(img);
-	/*
-	for(int k = 0; k < img->components; ++k) {
-		if(img->pixels[k] == NULL) 
-			printf("NULLLLL\n");
-		new_rows = realloc(img->pixels[k], 
-					 sizeof(double*) * new_height);
-		if(new_rows == NULL) {
-			fprintf(stderr, "row realloc out of mem\n");
-			return -1; 
-		}
-		img->pixels[k] = new_rows; 
-		for(int i = 0; i < new_height; ++i) {
-			if(img->pixels[k][i] == NULL) { 
-				printf("null cause new rows! i = %i \
-				        img->pixels[k][i] = %p \ 
-				        new_rows[i] = %p\n", 
-					i, img->pixels[k][i], new_rows[i]);
-			}
-			new_col = realloc(img->pixels[k][i], 
-					sizeof(double) * new_width);
-			if(new_col == NULL) {
-				fprintf(stderr, "col realloc out of mem\n");
-				return -1;
-			}
-			img->pixels[k][i] = new_col; 
-			if(img->pixels[k][i] == NULL) {
-				printf("FUCK\n");
-			}
-		}
+	struct image *pad_img = malloc(sizeof(struct image)); 
+	copy_img(pad_img, img);
+	pad_img->height = new_height;
+	pad_img->width = new_width;
+	pad_img->pixels = malloc_pixels(pad_img);
+	if(pad_img->pixels == NULL) {
+		fprintf(stderr, "pad img malloc_pixels fail\n");
+		return NULL;
 	}
-	*/
 	for(int k = 0; k < img->components; k++) {
-		for(int i = 0; i < old_height; ++i) {
-			for(int j = 0; j < old_width; ++j) {
-				new_pixels[k][i+pad_size][j+pad_size] = 
+		for(int i = 0; i < img->height; ++i) {
+			for(int j = 0; j < img->width; ++j) {
+				pad_img->pixels[k][i+pad_size][j+pad_size] = 
 					img->pixels[k][i][j];
 			}
 		}
 	}
-	double ***temp = img->pixels;
-	img->pixels = new_pixels;
-	print_image(img);
-	img->pixels=temp;
-	/*
-	//Shift pixels pad_size in x and y direction
-	printf("bf shift\n");
-	for(int k = 0; k < img->components; ++k) {
-		for(int i = new_height-pad_size; i >= pad_size; --i) {
-			for(int j = new_width-pad_size; j >= pad_size; --j) {
-				img->pixels[k][i][j] = 
-					img->pixels[k][i-pad_size][j-pad_size];
-			}
-		}
-	}
-	printf("af shift\n");
-	*/
-	/*
-	//Pad with zeros
-	printf("bf pad\n");
-	for(int k = 0; k < img->components; k++) {
-		for(int i = 0; i < new_height; ++i) {
-			for(int j = 0; j < new_width; ++j) {
-				if(i < pad_size || i >= (new_height-pad_size)) 
-					img->pixels[k][i][j] = 0.0;
-				if(j < pad_size || j >= (new_width-pad_size))
-					img->pixels[k][i][j] = 0.0;
-			}
-		}
-	}
-	printf("af pad\n");
-	*/
-	/*
-	img->height = new_height;
-	img->width = new_width;
-	*/
-	img->pixels = new_pixels;
-	return 1; 
+	destroy_img(img);
+	return pad_img;
 }
 
 //Compute the sum by adding the product of corresponding elements 
@@ -142,6 +80,7 @@ double sum(int k, int i, int j, struct image *img, struct kernel *kern) {
 //Multiply respective kernel values by those in image
 //Sum all these values! 
 //Place new pixels into an image and return that!
+//Deletes old image when done with it
 struct image* seq_con(struct image *img, struct kernel *kern) {
 	int height = img->height;
 	int width = img->width;
@@ -152,26 +91,23 @@ struct image* seq_con(struct image *img, struct kernel *kern) {
 		fprintf(stderr, "Failed to alloc new_img\n");
 		return NULL;
 	}
-	new_img->height = height;
-	new_img->width = width;
-	new_img->components = components; 
-	new_img->color_space = img->color_space;
-	double ***new_pixels = malloc_pixels(new_img); 	
-	if(new_pixels == NULL) return NULL; 
+	copy_img(new_img, img);
+	new_img->pixels = malloc_pixels(new_img); 	
+	if(new_img->pixels == NULL) return NULL; 
 	//Zero padding
-	int ret = pad_image(img, pad_size(kern)); 
-	if(ret < 0)
+	struct image *pad_img = pad_image(img, pad_size(kern)); 
+	if(img == NULL)
 		return NULL; 
 	//Convolution
 	for(int k = 0; k < components; k++) {
 		for(int i = 0; i < height; i++) { 
 			for(int j = 0; j < width; ++j) {
-				new_pixels[k][i][j] = sum(k, i, j, img, kern);
+				new_img->pixels[k][i][j] = 
+					sum(k, i, j, pad_img, kern);
 			}
 		}
 	}
-	//Configure filtered image structure
-	new_img->pixels = new_pixels;
+	destroy_img(pad_img);
 	return new_img;
 }
 
@@ -189,15 +125,12 @@ struct image* hyper_con(struct image *img, struct kernel *kern) {
 		fprintf(stderr, "Faield to alloc new_img\n");
 		return NULL;
 	}
-	new_img->height = height;
-	new_img->width = width;
-	new_img->components = components; 
-	new_img->color_space = img->color_space;
-	new_img->pixels = malloc_pixels(new_img); 
+	copy_img(new_img, img);
+	new_img->pixels = malloc_pixels(new_img);
 	if(new_img->pixels == NULL) return NULL;
 	//Zero padding
-	int ret = pad_image(img, pad_size(kern)); 
-	if(ret < 0)
+	struct image *pad_img = pad_image(img, pad_size(kern)); 
+	if(img == NULL)
 		return NULL; 
 	//Determine number of threads to use
 	//Ideally each thread has the same amount of work
@@ -213,7 +146,7 @@ struct image* hyper_con(struct image *img, struct kernel *kern) {
 		thread_params[i].id = i;
 		thread_params[i].work = work;
 		thread_params[i].num_threads = num_threads;
-		thread_params[i].img = img; 
+		thread_params[i].img = pad_img; 
 		thread_params[i].new_img = new_img; 
 		thread_params[i].kern = kern;
 		pthread_create(&threads[i], 
@@ -289,13 +222,14 @@ int blur(char *file) {
 	}
 	//Write image to disk
 	blur_img->name = get_filename(file);
+	printf("Writing %s\n", blur_img->name);
 	int ret = compress_image(blur_img);
+	printf("success\n");
 	if(!ret) {
 		fprintf(stderr, "Writing to jpeg failed\n");
 		return -1;
 	}
 	//Free memory
-	destroy_img(img); 
 	free(blur_img->name);
 	destroy_img(blur_img);
 	destroy_kernel(kern);
