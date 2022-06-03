@@ -1,126 +1,24 @@
 ---
-title: "Image Filtering"
+title: "Image Blurring"
 author: "Thomas Smale"
-date: "5/7/2022"
+date: "5/20/2022"
 output: pdf_document
 ---
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 library(gridExtra)
+library(grid)
 library(ggplot2)
 library(gridExtra)
 library(tidyverse)
 library(jpeg)
 library(plotly)
 library(reticulate)
+library(gsignal)
+library(processx)
 use_python('/usr/local/bin/python3')
-```
-
-# Intro
-
-Images have important applications in computer vision models. Images are represented in a computer using tensors or arrays. An image will be a matrix expressing its height, width, and number of components. The number of components determines if the image is colored or gray scale. Colored images may have 3 components, red, green, and blue. Gray scale images will have one component. The pixels in an image can range from [0, 1], [0, 255], or other options depending on it's configuration. 0 will mean the pixel has no red at that element and the max value like 1 will mean it's completely red. 
-
-# Rotating images
-
-Here we are reading in an image and formatting as a 3 dimensional array. There are three components, for red, green, and blue. Each component is a 2 dimensional array with width 159 and height 240. By using techniques like the transpose of a matrix we are able to rotate the image. 
-
-```{r}
-#Clockwise rotations
-img <- readJPEG('images/mud.jpeg')
-dims <- dim(img)
-red <- img[,,1]
-green <- img[,,2]
-blue <- img[,,3]
-#90 degrees 
-#Reverse order of rows, take transpose
-r <- t(red[nrow(red):1,])
-g <- t(green[nrow(green):1,])
-b <- t(blue[nrow(blue):1,])
-ninety <- array(c(r, g, b), dim=c(dim(b), 3))
-#180 degrees 
-#Reverse order of rows and cols
-r <- red[nrow(red):1, ncol(red):1]
-g <- green[nrow(green):1, ncol(green):1]
-b <- blue[nrow(blue):1, ncol(blue):1]
-oneeighty <- array(c(r, g, b), dim=c(dim(b), 3))
-#270 degrees 
-#Take transpose, reverse column order
-r <- t(red)[ncol(red):1,]
-g <- t(green)[ncol(green):1,]
-b <- t(blue)[ncol(blue):1,]
-twoseventy <- array(c(r, g, b), dim=c(dim(b), 3))
-```
-
-```{r include=FALSE}
-# Display new images
-# Layout new settings
-layout <- c(2,2)
-op <- par(
-  mar = c(1, 1, 1, 1),
-  mfrow = layout,
-  bty = "n",
-  omi = c(0, 0, 0, 0), 
-  oma = c(0, 0, 2, 0)
-)
-#First image
-dims <- dim(img)
-plot(
-  c(0, dims[1]),
-  c(dims[2], 0),
-  type = "n",
-  xlab = "",
-  ylab = "",
-  xaxt = "n",
-  yaxt = "n",
-  frame.plot = FALSE,
-  main = "Original"
-)
-rasterImage(img, 0, 0, dims[1], dims[2], interpolate = FALSE)
-#Second image
-dims <- dim(ninety)
-plot(
-  c(0, dims[1]),
-  c(dims[2], 0),
-  type = "n",
-  xlab = "",
-  ylab = "",
-  xaxt = "n",
-  yaxt = "n",
-  frame.plot = FALSE,
-  main = "90"
-)
-rasterImage(ninety, 0, 0, dims[1], dims[2], interpolate = FALSE)
-#Third image
-dims <- dim(oneeighty)
-plot(
-  c(0, dims[1]),
-  c(dims[2], 0),
-  type = "n",
-  xlab = "",
-  ylab = "",
-  xaxt = "n",
-  yaxt = "n",
-  frame.plot = FALSE,
-  main = "180"
-)
-rasterImage(oneeighty, 0, 0, dims[1], dims[2], interpolate = FALSE)
-#Fourth image
-dims <- dim(twoseventy)
-plot(
-  c(0, dims[1]),
-  c(dims[2], 0),
-  type = "n",
-  xlab = "",
-  ylab = "",
-  xaxt = "n",
-  yaxt = "n",
-  frame.plot = FALSE,
-  main = "270"
-)
-rasterImage(twoseventy, 0, 0, dims[1], dims[2], interpolate = FALSE)
-mtext(text="Clockwise Rotations", outer=TRUE, cex=1.5)
-par(op)
+setwd("~/classroom/csci551/final_project")
 ```
 
 # Gaussian Distribution aka Normal Distribution
@@ -139,17 +37,21 @@ $$I = \int_{-\infty}^{\infty}e(-x^2)dx=\sqrt{\pi}$$
 * The square root of pi is the area under the graph of the Gaussian function
 * So the area under the curve will equal about 1.772. 
 
-```{r}
+```{r echo=FALSE}
 gaussian <- function(x) {
   part1 <- 1 / sqrt(2*pi*sd(x))
   part2 <- exp(1)^((-x^2)/(2*(sd(x)^2)))
   return(part1*part2)
 }
+```
+```{r}
 gaussian2d <- function(x, y) {
   part1 <- 1 / (2*pi*sd(x*y)^2)
   part2 <- exp(1)^((-(x^2+y^2))/(2*(sd(x*y)^2)))
   return(part1*part2)
 }
+```
+```{r echo=FALSE}
 #The weight sets the standard deviation of the bell curve
 #We will explore this later!
 gaussian2d_fixed <- function(x, y, weight) {
@@ -158,7 +60,6 @@ gaussian2d_fixed <- function(x, y, weight) {
   return(part1*part2)
 }
 gaussian_integral <- function(x) {
-  
   return(exp(-x^2))
 }
 
@@ -174,10 +75,195 @@ gauss2d_interactive <- plot_ly(x=~x, y=~y, z=~outer(x, y, gaussian2d)) %>%
   layout(yaxis=(list(fixedrange=TRUE))) 
 gauss_integral <- ggplot(mapping=aes(x, y=gaussian_integral(x))) + geom_line() +
   ggtitle("Gaussian Integral")
-grid.arrange(gauss, gauss_integral, nrow=2)
+persp(x, y, z=outer(x, y, gaussian2d),
+      main="Gaussian Function in 2 Dimensions")
 ```
 
+### Gaussian Smoothing
+
+Here we use an extra noisy image to see what the pixel density looks like. The pixel density shows a distribution of the pixels. It is really a histogram that has been smoothed with a Gaussian curve. Before the image has been smoothed, its distribution is very hectic. There are all sorts of peaks and different skew's. Once we smooth the image with a Gaussian kernel, the image distribution looks more normal. 
+
+```{r echo=FALSE}
+img <- readJPEG('images/noisy.jpeg')
+red <- img[,,1]
+green <- img[,,2]
+blue <- img[,,3]
+df <- data.frame(red=c(red), green=c(green), blue=c(blue))
+df <- pivot_longer(df, cols=c('red', 'green', 'blue'), names_to = 'color')
+dist <- ggplot(df, aes(x=value, group=color, colour=color)) + 
+  geom_density(kernel='gaussian') +
+  scale_color_manual(values=c('blue', 'green', 'red')) + 
+  ggtitle('Pixel Density')
+#Plot image and graph
+grid.arrange(rasterGrob(img), dist, nrow=2, 
+             top=textGrob("A Noisy Image"))
+```
+
+```{r echo=FALSE}
+img <- readJPEG('output/my_noisy.jpeg')
+red <- img[,,1]
+green <- img[,,2]
+blue <- img[,,3]
+df <- data.frame(red=c(red), green=c(green), blue=c(blue))
+df <- pivot_longer(df, cols=c('red', 'green', 'blue'), names_to = 'color')
+dist <- ggplot(df, aes(x=value, group=color, colour=color)) + 
+  geom_density(kernel='gaussian') +
+  scale_color_manual(values=c('blue', 'green', 'red')) + 
+  ggtitle('Pixel Density')
+#Plot image and graph
+grid.arrange(rasterGrob(img), dist, nrow=2, 
+             top=textGrob("The Noisy Image Smoothed"))
+```
+
+## Importance of Standard Deviation
+
+The standard deviation measures on average how far away observations are from the mean. The mean is the center of the Gaussian distribution. We can see that as we increase the standard deviation, we get more smoothing. However, increase it too much and the image goes dark!
+
+```{r echo=FALSE}
+#Kernel size 5
+gaussian2d_fixed <- function(x, y, weight) {
+  part1 <- 1 / (2*pi*(weight^2))
+  part2 <- exp(1)^((-(x^2+y^2))/(2*(weight^2)))
+  return(part1*part2)
+}
+x <- c(2, 1, 0, 1, 2,
+       2, 1, 0, 1, 2,
+       2, 1, 0, 1, 2,
+       2, 1, 0, 1, 2,
+       2, 1, 0, 1, 2)
+y <- c(2, 2, 2, 2, 2,
+       1, 1, 1, 1, 1,
+       0, 0, 0, 0, 0,
+       1, 1, 1, 1, 1,
+       2, 2, 2, 2, 2)
+sd <- 1.0
+k1 <- gaussian2d_fixed(x, y, sd)
+k2 <- gaussian2d_fixed(x, y, 3.0)
+```
+
+```{r echo=FALSE}
+#Blurs an image by applying 2d convolution with gaussian filter
+blur_rgb_img <- function(img, kernel) {
+  red <- img[,,1]
+  green <- img[,,2]
+  blue <- img[,,3]
+  r <- conv2(red, kernel, 'valid')
+  g <- conv2(green, kernel, 'valid')
+  b <- conv2(blue, kernel, 'valid')
+  rgb <- array(dim=c(dim(b), 3))
+  rgb[,,1] <- r
+  rgb[,,2] <- g
+  rgb[,,3] <- b
+  return(rgb)
+}
+```
+
+```{r echo=FALSE}
+#Plot 2 different examples of blured image with different weights
+noisy_og <-readJPEG('images/western_poison_oak_images/western_poison_oak1.jpeg')
+noisy_blur <- blur_rgb_img(noisy_og, k1)
+noisy_blur5 <- blur_rgb_img(noisy_og, k2)
+dandelion_og <- readJPEG('images/flowers/dandelion/flower829.jpeg')
+dandelion_blur <- blur_rgb_img(dandelion_og, k1)
+dandelion_blur5 <- blur_rgb_img(dandelion_og, k2)
+layout <- c(3,2)
+op <- par(
+  mar = c(1, 1, 1, 1),
+  mfrow = layout,
+  bty = "n",
+  omi = c(0, 0, 0, 0), 
+  oma = c(0, 1, 2, 0)
+)
+#First image
+dims <- dim(noisy_og)
+plot(
+  c(0, dims[1]),
+  c(dims[2], 0),
+  type = "n",
+  xlab = "",
+  ylab = "",
+  xaxt = "n",
+  yaxt = "n",
+  frame.plot = FALSE,
+)
+rasterImage(noisy_og, 0, 0, dims[1], dims[2], interpolate = FALSE)
+mtext("Original", side=2, cex=1)
+#Second image
+dims <- dim(dandelion_og)
+plot(
+  c(0, dims[1]),
+  c(dims[2], 0),
+  type = "n",
+  xlab = "",
+  ylab = "",
+  xaxt = "n",
+  yaxt = "n",
+  frame.plot = FALSE,
+)
+rasterImage(dandelion_og, 0, 0, dims[1], dims[2], interpolate = FALSE)
+#Third image
+dims <- dim(noisy_blur)
+plot(
+  c(0, dims[1]),
+  c(dims[2], 0),
+  type = "n",
+  xlab = "",
+  ylab = "",
+  xaxt = "n",
+  yaxt = "n",
+  frame.plot = FALSE,
+)
+rasterImage(noisy_blur, 0, 0, dims[1], dims[2], interpolate = FALSE)
+mtext("sd = 1", side=2, cex=1)
+#Fourth image
+dims <- dim(dandelion_blur)
+plot(
+  c(0, dims[1]),
+  c(dims[2], 0),
+  type = "n",
+  xlab = "",
+  ylab = "",
+  xaxt = "n",
+  yaxt = "n",
+  frame.plot = FALSE,
+)
+rasterImage(dandelion_blur, 0, 0, dims[1], dims[2], interpolate = FALSE)
+#Fifth image
+dims <- dim(noisy_blur5)
+plot(
+  c(0, dims[1]),
+  c(dims[2], 0),
+  type = "n",
+  xlab = "",
+  ylab = "",
+  xaxt = "n",
+  yaxt = "n",
+  frame.plot = FALSE,
+)
+rasterImage(noisy_blur5, 0, 0, dims[1], dims[2], interpolate = FALSE)
+mtext("sd = 3", side=2, cex=1)
+#Sixth image
+dims <- dim(dandelion_blur5)
+plot(
+  c(0, dims[1]),
+  c(dims[2], 0),
+  type = "n",
+  xlab = "",
+  ylab = "",
+  xaxt = "n",
+  yaxt = "n",
+  frame.plot = FALSE,
+)
+rasterImage(dandelion_blur5, 0, 0, dims[1], dims[2], interpolate = FALSE)
+mtext(text="Gaussian Smoothing", outer=TRUE, cex=1.5)
+par(op)
+```
+
+
 ### Creating a kernel 
+
+The Gaussian curve is a continuous function, and we are working in a discrete space. Computer's do not have the ability to store an infinitely large image. So we need to take an approximation of the Gaussian function. We do this by creating a kernel.
+
 A kernel is a square matrix of coefficients with an anchor point in the center. We refer to the center point aka anchor, as (0, 0). The rest of the points represent the distance from the anchor using pixels as a unit. We plug these values into the 2 dimensional Gaussian function to initialize the values of the kernel. The sum of the values in the kernel must equate to 1. The original output from the 2 dimensional Gaussian function will not equal 1. So we take the sum of the values outputted, set it as the denominator, and divide by 1. Then we multiply that, (1 / sum(x)) by all the values from the output. The sum of the values in the kernel will now equal 1. We use the kernel to apply convolutions to the image to produce edge detection. 
 
 $$
@@ -188,7 +274,7 @@ $$
 \end{array}
 $$
 
-```{r}
+```{r echo=FALSE}
 #Kernel size 3
 x <- c(1, 0, 1, 
        1, 0, 1, 
@@ -245,7 +331,7 @@ legend("topright",
        col = colors[1])
 ```
 
-2 important concepts conveyed in the graph above is that the kernel is symmetric and the overall shape resembles a bell curve. The different peaks represent 1, 2, and 3 standard deviations from the mean (center) of the bell curve. As the weight changes, the y-axis becomes smaller and smaller. This means that..?
+2 important concepts conveyed in the graph above is that the kernel is symmetric and the overall shape resembles a bell curve. The different peaks represent 1, 2, and 3 standard deviations from the mean (center) of the bell curve. As the weight changes, the y-axis becomes smaller and smaller.
 
 
 # Convolution
@@ -272,106 +358,100 @@ $$y[i, j] = \sum_{m=-\infty}^{\infty} \sum_{n=-\infty}^{m=\infty}h[m, n]*x[i-m,j
 
 Here x is the input image and y is the output which is the new image. H is the kernel matrix. I and j iterate over the image while m and n deal with that of the kernel. 
 
-When applying a 2d convolution using a gaussian filter it reduces the noise in the image. This gives the effect of blurring the image. 
+When applying a 2d convolution using a Gaussian filter it reduces the noise in the image. This gives the effect of blurring the image. 
 
-##Graph image 
-```{r}
-mygauss <- function(x, y) {
-  weight <- 5.5
-  part1 <- 1 / (2*pi*(weight^2))
-  part2 <- exp(1)^((-(x^2+y^2))/(2*(weight^2)))
-  return(part1*part2)
-}
-img <- readJPEG('images/dandelion.jpeg')
-red <- img[,,1]
-green <- img[,,2]
-blue <- img[,,3]
-df <- data.frame(red=c(red), green=c(green), blue=c(blue))
-df <- pivot_longer(df, cols=c('red', 'green', 'blue'), names_to = 'color')
-ggplot(df, aes(x=value, group=color, colour=color)) + 
-  geom_density(kernel='gaussian') +
-  scale_color_manual(values=c('blue', 'green', 'red')) + 
-  ggtitle('Pixel Density')
-r <- conv2(red, z1, 'valid')
-g <- conv2(green, z1, 'valid')
-b <- conv2(blue, z1, 'valid')
-rgb <- array(dim=c(dim(b), 3))
-rgb[,,1] <- r
-rgb[,,2] <- g
-rgb[,,3] <- b
+### Results from convolution
+
+To see my comparison to an openCV comparison run the blur.py file. 
+
+
+```{python echo=FALSE, include=FALSE}
+import numpy as np
+import cv2 as cv
+from matplotlib import pyplot as plt
+
+fig, axs = plt.subplots(2, 3)
+
+img = cv.imread('images/valley_oak/valley_oak11.jpg')
+
+weight = 5.5
+blur = cv.GaussianBlur(img, (5,5), sigmaX=weight, sigmaY=weight)
+
+myblur = cv.imread('output/valley_oak11.jpg')
+
+axs[0, 0].imshow(img)
+axs[0, 0].set_title("Original")
+axs[0, 0].set_xticks([])
+axs[0, 0].set_yticks([])
+
+axs[0, 1].imshow(blur)
+axs[0, 1].set_title("Python Gaussian")
+axs[0, 1].set_xticks([])
+axs[0, 1].set_yticks([])
+
+axs[0, 2].imshow(myblur)
+axs[0, 2].set_title("My Gauss")
+axs[0, 2].set_xticks([])
+axs[0, 2].set_yticks([])
+
+img = cv.imread('images/valley_oak/valley_oak69.jpg')
+
+weight = 5.5
+blur = cv.GaussianBlur(img, (5,5), sigmaX=weight, sigmaY=weight)
+
+myblur = cv.imread('output/valley_oak69.jpg')
+
+axs[1, 0].imshow(img)
+axs[1, 0].set_xticks([])
+axs[1, 0].set_yticks([])
+
+axs[1, 1].imshow(blur)
+axs[1, 1].set_xticks([])
+axs[1, 1].set_yticks([])
+
+axs[1, 2].imshow(myblur)
+axs[1, 2].set_xticks([])
+axs[1, 2].set_yticks([])
+
+plt.show()
+exit
 ```
 
-```{r}
-layout <- c(1,1)
-op <- par(
-  mar = c(1, 1, 1, 1),
-  mfrow = layout,
-  bty = "n",
-  omi = c(0, 0, 0, 0)
-)
-#First image
-dims <- dim(rgb)
-plot(
-  c(0, dims[1]),
-  c(dims[2], 0),
-  type = "n",
-  xlab = "",
-  ylab = "",
-  xaxt = "n",
-  yaxt = "n",
-  frame.plot = FALSE,
-  main = "Gaussian Blur"
-)
-rasterImage(rgb, 0, 0, dims[1], dims[2], interpolate = FALSE)
-par(op)
+
+### Sequential vs Pthread
+
+Making programs run efficiently is one of the most important jobs of a computer scientist. Programs must take advantage of ever improving changes to the hardware. Some ways to do this are by using pthreads, MPI, or openMP. For this project I used Pthread's because of how compatible it is. A potential problem with using pthread's is that it can require a mutex lock which serializes the code. Convolution can be considered an embarrassingly parallel program since it is not very difficult to get speed up. What I did was divide the work among the threads. So each thread convoluted a part of the image. It resulted in very successful results! 
+
+Time was measured using the time library from C. This was wrapped around the function call to convolute. That way, measurements like file io do not make my results bias. However, the program as a whole has room for speedup. The program is able to read a directory recursively. File IO can be made faster by allocating multiple threads to read and write to files. 
+
+```{r echo=FALSE, warning=FALSE, message=FALSE}
+seq <- read.csv("times/seq_times.csv")
+thread4 <- read.csv("times/hyper4.csv")
+thread8 <- read.csv("times/hyper8.csv")
+thread12 <- read.csv("times/hyper12.csv")
+common <- Reduce(intersect, list(seq$file, thread4$file, 
+                                 thread8$file, thread12$file))
+seq <- seq[seq$file %in% common, ]
+thread4 <- thread4[thread4$file %in% common, ]
+thread8 <- thread8[thread8$file %in% common, ]
+thread12 <- thread12[thread12$file %in% common, ]
+seq <- cbind(seq, id="seq", x=1:length(common))
+thread4 <- cbind(thread4, id="thread4", x=1:length(common))
+thread8 <- cbind(thread8, id="thread8", x=1:length(common))
+thread12 <- cbind(thread12, id="thread12", x=1:length(common))
+df <- full_join(full_join(seq, thread4),
+                full_join(thread8, thread12))
+reg <- ggplot(df, aes(x, y=time, group=id, colour=id)) + 
+  geom_point() + geom_line() +
+  theme(axis.ticks.x=element_blank(),
+        axis.text.x.bottom = element_blank()) +
+  ggtitle("Original data") +
+  xlab("Image") + ylab("Time")
+smooth <- ggplot(df, aes(x, y=time, group=id, colour=id)) +
+  geom_smooth(method='loess', se=FALSE) +
+    theme(axis.ticks.x=element_blank(),
+    axis.text.x.bottom = element_blank()) +
+  ggtitle("Smoothed")
+grid.arrange(reg, smooth, nrow=2, top="Image Convolution Speedup")
 ```
 
-
-Working with Uniform Distribution.  
-
-CLT: 
-Take K amount of random samples from x. Then take the mean of those K values. Repeat his N amount of times. Create a histogram from all the means. Then plot a curve.
-* Sample size should be around 30. 
-* Maybe calculate kernal using this 
-* Can get mean and SD from CLT
-
-Normal Distribution: 
-  Probability on the y axis 
-  Likelihood of finding that observation
-PDF: Probability Density Function
-* Derivative of the CDF
-Default is mean = 0 and standard deviation = 1
-Density curve
-* Look for peaks of frequently occuring values
-* Skew: To the left or to the right
-  + Many models assume no skew
-  + Can inform us about model bias 
-* Median: 
-* Mean: Center of the curve
-* SD: width of the curve 
-  + For normal curve 95% of measurements fall between +- 2 sd of the mean
-Quantiles
-* Waht are thossee
-CDF: Cumulative Distribution Function
-
-```{r}
-x <- seq(-10, 10, by=.1)
-distributions <- data.frame(x, 
-                            probability=pnorm(x), 
-                            density=dnorm(x), 
-                            gauss=gaussian(x)
-                            )
-ggplot(distributions, aes(x, x)) + geom_line()
-#ggplot(pdf, aes(x, y=qnorm(density))) + geom_line()
-cdf <- ggplot(distributions, aes(x, y=probability)) + geom_line() + 
-  ggtitle("Cumulative Density Function")
-pdf <- ggplot(distributions, aes(x, y=density)) + geom_line() + 
-  ggtitle("Probability Density Function")
-d <- density(x, kernel="gaussian")
-df <- data.frame(x=d$x, y=d$y)
-grid.arrange(pdf, cdf)
-# pdf_plot <- ggplot(pdf, aes(x=probability, y=density)) + geom_line() +
-#   ggtitle("Probability Density Function")
-rand <- ggplot(mapping=aes(x=rnorm(100), fill="orange")) + geom_density() + 
-  ggtitle("Random distribution")
-```
