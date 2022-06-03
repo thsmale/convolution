@@ -7,40 +7,40 @@ void read_dir(char *dirname) {
 	char *filename;
 	char *parent = ".\0"; 
 	char *cur = "..\0";
+	size_t max_len = strlen(dirname) + DNAME_MAX_SIZE;
+	char *filepath = malloc(sizeof(char) * max_len);
+	if(dirname[strlen(dirname)-1] != '/')
+		strcat(dirname, "/\0");
 	dirp = opendir(dirname);
-	if(dirp == NULL)
+	if(dirp == NULL) {
+		fprintf(stderr, "dirp Unable to read %s\n", dirname);
 		return;
+	}
 	while((file = readdir(dirp)) != NULL) {
 		filename = file->d_name; 
+		//readdir includes . and .. when reading
+		if(strcmp(filename, parent) == 0) 
+			continue;
+		if(strcmp(filename, cur) == 0) 
+			continue;
+		//Get the full filepath of the file
+		//Alloc enough memory
+		strcpy(filepath, dirname);
+		strcat(filepath, filename);
 		if(file->d_type == DT_REG) {
 			//Regular file
-			printf("%s ", filename);
-			/*
-			if(!blur(filename)) {
-				printf(stderr, "Unable to read %s\n", filename);
+			//Append path 
+			if(!blur(filepath)) {
+				fprintf(stderr, "Unable to blur %s\n", filepath);
 			}
-			*/
 		}
 		if(file->d_type == DT_DIR) {
 			//Directory
-			//readdir includes . and .. when reading
-			if(strcmp(filename, parent) == 0) 
-				continue;
-			if(strcmp(filename, cur) == 0) 
-				continue;
-			//Initialize filepath to new dir
-			if(dirname[strlen(dirname)-1] != '/')
-				strcat(dirname, "/\0");
-			//Alloc enough memory
-			int new_len = strlen(dirname) + strlen(filename);
-			char *new_dir = malloc(sizeof(char) * new_len);
-			strcat(new_dir, dirname);
-			strcat(new_dir, filename);
-			printf("\n\n\n%s\n", new_dir);
-			read_dir(new_dir);
-			free(new_dir);
+			read_dir(filepath);
 		}
+		filepath[0] = '\0';
 	}
+	free(filepath);
 }
 
 //Input is possibly a full filepath
@@ -112,12 +112,11 @@ struct image* decompress_jpeg(char *filename) {
 	img->width = width; 
 	img->components = components; 
 	img->color_space = cinfo.out_color_space; 
-	JSAMPIMAGE pixels = format_pixels(buffer, img);
-	img->pixels = scale_pixels(pixels, img);
+	img->pixels = format_pixels(buffer, img);
+	if(img->pixels == NULL) return NULL; 
 	//Clean up your mess, deallocate memory
 	(void) jpeg_finish_decompress(&cinfo); 
 	jpeg_destroy_decompress(&cinfo); 
-	free_JSAMPIMAGE(pixels, img);
 	fclose(fd); 
 	return img; 
 }
@@ -135,6 +134,10 @@ int compress_image(struct image *img) {
 	char *outfile= malloc(sizeof(char) * 256);
 	strcpy(outfile, "output/\0");
 	outfile = realloc(outfile, sizeof(char) * strlen(img->name));
+	if(outfile == NULL) {
+		fprintf(stderr, "outfile realloc failed\n");
+		return -1; 
+	}
 	strcat(outfile, img->name);
 	fd = fopen(outfile, "wb"); 
 	if(fd == NULL) {
@@ -157,8 +160,11 @@ int compress_image(struct image *img) {
 	int components= img->components;
 	int height = img->height;
 	int width = img->width;
-	JSAMPIMAGE temp = descale_pixels(img);
-	JSAMPARRAY buffer = deformat_pixels(temp, img);
+	int row_stride = width * components;
+	//Mem is automatically deallocated by jpeglib
+	JSAMPARRAY buffer = (*cinfo.mem->alloc_sarray)
+		((j_common_ptr) &cinfo, JPOOL_IMAGE, row_stride, height);
+	deformat_pixels(buffer, img);
 	//Write to the file one scanline at a time (slow)
 	//TODO: Increase bandwidth
 	while(cinfo.next_scanline < cinfo.image_height) {
@@ -169,11 +175,6 @@ int compress_image(struct image *img) {
 	free(outfile);
 	fclose(fd);
 	jpeg_destroy_compress(&cinfo);
-	free_JSAMPIMAGE(temp, img);
-	for(int i = 0; i < height; ++i) {
-		free(buffer[i]);
-	}
-	free(buffer);
 	return 1;
 }
 

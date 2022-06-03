@@ -17,7 +17,7 @@
 #include "convolution.h"
 #include "debug.h"
 
-#define PATH_MAX 512
+#define DNAME_MAX_SIZE 256
 
 void read_dir(char *dirname);
 char* get_filename(char *file);

@@ -31,7 +31,6 @@ int pad_size(struct kernel *kern) {
 //Padding adds X zeros to the image 
 //X is determined by pad_size()
 //This makes convoluting the image easier
-//Using realloc, it often returns new pointer address
 //Returns a new image that is padded, destroys old one
 struct image* pad_image(struct image *img, int pad_size) {
 	int new_height = (pad_size*2) + img->height; 
@@ -183,10 +182,8 @@ void *convolution(void *thread_args) {
 	else 
 		end = id*work+work;
 
-	/*
 	printf("Hello from thread %i convoluting rows %i-%i\n",
 			id, start, end);
-			*/
 	//Convolution
 	for(int k = 0; k < components; k++) {
 		for(int i = start; i < end; i++) { 
@@ -203,28 +200,21 @@ void *convolution(void *thread_args) {
 //Writes new image to output/
 int blur(char *file) {
 	//Read file
+	printf("Processing %s\n", file);
 	struct image *img = decompress_jpeg(file); 
 	if(img == NULL) {
 		fprintf(stderr, "Reading the jpeg failed\n"); 
 		return -1; 
 	}
 	//Apply blur filter to image
-	struct kernel *kern = init_kernel();
-	if(kern == NULL) {
-		fprintf(stderr, "Unable to create kernel\n");
-		return -1; 
-	}
-	struct image *blur_img = seq_con(img, kern);
-	//struct image *blur_img = hyper_con(img, kern);
-	if(blur_img == NULL) {
-		fprintf(stderr, "Failed to blur image\n");
-		return -1; 
-	}
+	struct kernel *kern = init_kernel(KSIZE);
+	if(kern == NULL)
+		return -1;
+	//struct image *blur_img = seq_con(img, kern);
+	struct image *blur_img = hyper_con(img, kern);
 	//Write image to disk
 	blur_img->name = get_filename(file);
-	printf("Writing %s\n", blur_img->name);
 	int ret = compress_image(blur_img);
-	printf("success\n");
 	if(!ret) {
 		fprintf(stderr, "Writing to jpeg failed\n");
 		return -1;
@@ -232,6 +222,7 @@ int blur(char *file) {
 	//Free memory
 	free(blur_img->name);
 	destroy_img(blur_img);
-	destroy_kernel(kern);
+	free(kern);
+	printf("success\n");
 	return 1;
 }

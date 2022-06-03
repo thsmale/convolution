@@ -39,10 +39,9 @@ void print_image(struct image *img) {
 //Prints out kernel x values than y values
 void print_kernel(struct kernel *kern) {
 	int size = kern->size;
-	double **values = kern->values;
 	for(int i = 0; i < size; ++i) {
 		for(int j = 0; j < size; ++j) {
-			printf("%f ", values[i][j]);
+			printf("%f ", kern->values[i][j]);
 		}
 		printf("\n");
 	}

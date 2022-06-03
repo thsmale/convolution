@@ -1,4 +1,5 @@
 #!/bin/bash
+rm a.out
 
 gcc main.c data.c fio.c convolution.c debug.c /usr/local/lib/libjpeg.a 
 
