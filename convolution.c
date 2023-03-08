@@ -39,6 +39,7 @@ struct image* pad_image(struct image *img, int pad_size) {
 	copy_img(pad_img, img);
 	pad_img->height = new_height;
 	pad_img->width = new_width;
+	pad_img->pixels = NULL;
 	pad_img->pixels = malloc_pixels(pad_img);
 	if(pad_img->pixels == NULL) {
 		fprintf(stderr, "pad img malloc_pixels fail\n");
@@ -210,8 +211,8 @@ int blur(char *file) {
 	struct kernel *kern = init_kernel(KSIZE);
 	if(kern == NULL)
 		return -1;
-	//struct image *blur_img = seq_con(img, kern);
-	struct image *blur_img = hyper_con(img, kern);
+	struct image *blur_img = seq_con(img, kern);
+	//struct image *blur_img = hyper_con(img, kern);
 	//Write image to disk
 	blur_img->name = get_filename(file);
 	int ret = compress_image(blur_img);

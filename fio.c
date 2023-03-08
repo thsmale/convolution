@@ -107,7 +107,7 @@ struct image* decompress_jpeg(char *filename) {
 		(void) jpeg_read_scanlines(&cinfo, &buffer[cinfo.output_scanline], 1); 
 	}
 	//Configure lighter weight struct for decompressed image
-	struct image *img = malloc(sizeof(struct image)); 
+	struct image *img = malloc(sizeof(struct image));
 	img->height = height;
 	img->width = width; 
 	img->components = components; 

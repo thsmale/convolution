@@ -53,8 +53,10 @@ void deformat_pixels(JSAMPARRAY buffer, struct image *img) {
 //A kernel is a square matrix 
 struct kernel* init_kernel() {
 	//Size must be odd so there is an anchor
-	if(KSIZE % 2 == 0)
+	if(KSIZE % 2 == 0) {
+		fprintf(stderr, "KSIZE must be odd\n");
 		return NULL;
+	}
 	//A 3d array for x values and y values
 	//x and y values representing distance from anchor
 	double kdist[2][KSIZE][KSIZE]; 
@@ -67,8 +69,8 @@ struct kernel* init_kernel() {
 	}
 	struct kernel *kern = malloc(sizeof(struct kernel));
 	if(kern == NULL) {
-		fprintf(stderr, "kernel alloc failed\n");
-		return NULL; 
+		fprintf(stderr, "Failed to alloc mem for kern\n");
+		return NULL;
 	}
 	kern->size = KSIZE; 
 	//Insert values into gaussian function for discretization
@@ -125,8 +127,7 @@ double*** malloc_pixels(struct image *img) {
 			return NULL;
 		}
 		for(int i = 0; i < height; ++i) {
-			pixels[k][i] = calloc(width, 
-					sizeof(double) * width);
+			pixels[k][i] = calloc(width, sizeof(double));
 			if(pixels[k][i] == NULL) {
 				fprintf(stderr, "malloc_pixels col failed\n");
 				return NULL; 
