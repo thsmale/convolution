@@ -27,5 +27,5 @@ read_dir("/home/tom/images/jpeg_images/")
 ```
 
 ## Dependencies
-[jpeglib](https://libjpeg.sourceforge.net) for reading and writing jpeg files
-GNU standard C library
+- [jpeglib](https://libjpeg.sourceforge.net) for reading and writing jpeg files
+- GNU standard C library
