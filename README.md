@@ -6,8 +6,8 @@ There is a sequential convolution and a multi threaded convolution using pthread
 The blurred image is then written to the output/ directory. 
 
 ## Before and after
-#![original oak tree image](og_oak.jpeg)
-#![the image after the convolution](oak_blur.jpeg)
+#![original oak tree image](tree.jpeg)
+#![the image after the convolution](tree_blur.jpeg)
 
 ## Running
 ```
